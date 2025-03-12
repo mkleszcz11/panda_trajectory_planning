@@ -9,7 +9,9 @@ import numpy as np
 import csv
 import time
 from trac_ik_python.trac_ik import IK
-from PandaTransformations import PointWithOrientation, PandaTransformations
+from PandaTransformations import PandaTransformations
+from PointWithOrientation import PointWithOrientation
+import math
 
 class FrankaMotionController:
     def __init__(self):
@@ -37,11 +39,17 @@ class FrankaMotionController:
         #     panda_transformations.transform_table_to_base_link(panda_transformations.table_corners["bottom_left"]),
         # ]
 
+        # target_positions_in_table_coordinations
+        point_1 = PointWithOrientation(0.01, 0.01, 0, 0.0, math.pi , math.pi/4.0)
+        point_2 = PointWithOrientation(0.1, 0.1, 0.1, 0.0, math.pi , math.pi/4.0)
+        point_3 = PointWithOrientation(0.2, 0.2, 0.0, 0.0, math.pi , math.pi/4.0)
+        point_4 = PointWithOrientation(0.3, 0.3, 0.1, 0.0, math.pi , math.pi/4.0)
+
         self.target_positions = [
-        panda_transformations.table_corners["top_right"].get_position_and_orientation_as_list(),
-        panda_transformations.table_corners["top_left"].get_position_and_orientation_as_list(),
-        panda_transformations.table_corners["bottom_right"].get_position_and_orientation_as_list(),
-        panda_transformations.table_corners["bottom_left"].get_position_and_orientation_as_list()
+            panda_transformations.transform_point(point_1, 'table', 'base'),
+            panda_transformations.transform_point(point_2, 'table', 'base'),
+            panda_transformations.transform_point(point_3, 'table', 'base'),
+            panda_transformations.transform_point(point_4, 'table', 'base')
         ]
 
         # Storage for data comparison
@@ -77,23 +85,34 @@ class FrankaMotionController:
 
         self.log_data(joint_positions, method, start_time, end_time)
 
-    def move_to_pose_planner(self, x, y, z, roll, pitch, yaw):
+    def move_to_pose_planner(self, pose: PointWithOrientation):
         """Move the robot using MoveIt's motion planner"""
         pose_target = geometry_msgs.msg.Pose()
-        quaternion = tf_trans.quaternion_from_euler(roll, pitch, yaw)
-        pose_target.position.x = x
-        pose_target.position.y = y
-        pose_target.position.z = z
+
+        # Convert roll, pitch, yaw to quaternion
+        quaternion = tf_trans.quaternion_from_euler(pose.roll, pose.pitch, pose.yaw)
+
+        # Assign position and orientation
+        pose_target.position.x = pose.x
+        pose_target.position.y = pose.y
+        pose_target.position.z = pose.z
         pose_target.orientation.x = quaternion[0]
         pose_target.orientation.y = quaternion[1]
         pose_target.orientation.z = quaternion[2]
         pose_target.orientation.w = quaternion[3]
 
+        # Set target and execute
         self.group.set_pose_target(pose_target)
         start_time = time.time()
-        self.group.go(wait=True)
+        success = self.group.go(wait=True)
         end_time = time.time()
 
+        if success:
+            rospy.loginfo("Motion planning successful")
+        else:
+            rospy.logerr("Motion planning failed")
+
+        # Log data (optional)
         self.log_data(self.group.get_current_joint_values(), "Trajectory Planner", start_time, end_time)
 
     def log_data(self, joint_positions, method, start_time, end_time):
@@ -136,7 +155,7 @@ class FrankaMotionController:
         for pos in self.target_positions:
             print(f"Moving to position: {pos}, type: {type(pos)}")
             # pos = pos.get_position_and_orientation_as_list()
-            self.move_to_pose_planner(*pos)
+            self.move_to_pose_planner(pos)
 
         rospy.loginfo("Returning to Start Joint Configuration after execution")
         self.move_to_joint_config(self.start_joint_config)
