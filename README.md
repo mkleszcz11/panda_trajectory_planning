@@ -1,7 +1,7 @@
 # panda_trajectory_planning
 
 ## Usefull comands
-Run franka panda simulation  (gazebo)
+Run franka panda simulation (moveit and gazebo)
 ```bash
-roslaunch
+roslaunch panda_moveit_config demo_gazebo.launch
 ```

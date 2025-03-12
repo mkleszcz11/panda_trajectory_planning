@@ -9,6 +9,7 @@ import numpy as np
 import csv
 import time
 from trac_ik_python.trac_ik import IK
+from PandaTransformations import PointWithOrientation, PandaTransformations
 
 class FrankaMotionController:
     def __init__(self):
@@ -27,12 +28,20 @@ class FrankaMotionController:
         # Define fixed joint configuration for consistent execution
         self.start_joint_config = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]  # Joint angles in radians
 
+        panda_transformations = PandaTransformations()
         # Define points in (x, y, z, roll, pitch, yaw)
+        # self.target_positions = [
+        #     panda_transformations.transform_table_to_base_link(point=PointWithOrientation(0,0,0)),
+        #     panda_transformations.transform_table_to_base_link(panda_transformations.table_corners["top_left"]),
+        #     panda_transformations.transform_table_to_base_link(panda_transformations.table_corners["bottom_right"]),
+        #     panda_transformations.transform_table_to_base_link(panda_transformations.table_corners["bottom_left"]),
+        # ]
+
         self.target_positions = [
-            (0.5, 0.2, 0.4, 0, 0, 0),  # A
-            (0.4, -0.2, 0.5, 0, 0, 1.57),  # B
-            (0.3, 0.1, 0.6, 0, -0.5, 0),  # C
-            (0.6, -0.1, 0.3, 1.57, 0, 0),  # D
+        panda_transformations.table_corners["top_right"].get_position_and_orientation_as_list(),
+        panda_transformations.table_corners["top_left"].get_position_and_orientation_as_list(),
+        panda_transformations.table_corners["bottom_right"].get_position_and_orientation_as_list(),
+        panda_transformations.table_corners["bottom_left"].get_position_and_orientation_as_list()
         ]
 
         # Storage for data comparison
@@ -108,19 +117,25 @@ class FrankaMotionController:
     def execute(self):
         """Main execution sequence"""
 
-        # Move to fixed starting joint configuration before each method
-        rospy.loginfo("Moving to Start Joint Configuration before TRAC-IK execution")
-        self.move_to_joint_config(self.start_joint_config)
+        # # Move to fixed starting joint configuration before each method
+        # rospy.loginfo("Moving to Start Joint Configuration before TRAC-IK execution")
+        # self.move_to_joint_config(self.start_joint_config)
 
-        rospy.loginfo("Executing predefined movements using TRAC-IK")
-        for pos in self.target_positions:
-            self.move_to_pose_trac_ik(*pos)
+        # rospy.loginfo("Executing predefined movements using TRAC-IK")
+        # for pos in self.target_positions:
+        #     self.move_to_pose_trac_ik(*pos)
 
         rospy.loginfo("Returning to Start Joint Configuration before trajectory planner execution")
         self.move_to_joint_config(self.start_joint_config)
 
         rospy.loginfo("Executing predefined movements using a Trajectory Planner")
+
+        # Transform the list of PointWithOrientation objects to a list of lists
+        # list_of_poses = [pos.get_position_and_orientation_as_list() for pos in self.target_positions]
+        # print(f"List of poses: {list_of_poses}")
         for pos in self.target_positions:
+            print(f"Moving to position: {pos}, type: {type(pos)}")
+            # pos = pos.get_position_and_orientation_as_list()
             self.move_to_pose_planner(*pos)
 
         rospy.loginfo("Returning to Start Joint Configuration after execution")

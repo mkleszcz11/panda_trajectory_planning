@@ -8,6 +8,7 @@ import tf.transformations as tf_trans
 from trac_ik_python.trac_ik import IK
 import numpy as np
 from random import random
+import math
 
 from PandaTransformations import PointWithOrientation, PandaTransformations
 
@@ -49,11 +50,11 @@ class FrankaIKController:
 if __name__ == "__main__":
     controller = FrankaIKController()
 
-    # # Example: Move to (x=0.4, y=0, z=0.5) with no rotation
-    # rospy.sleep(1)  # Allow ROS to initialize
-    # x = 0.4#random()
-    # y = 0.4#random()
-    # z = 0.2#random()
+    # Example: Move to (x=0.4, y=0, z=0.5) with no rotation
+    rospy.sleep(1)  # Allow ROS to initialize
+    # x = 0.6866172576844853
+    # y = -0.40264805670207643
+    # z = 0.1882167138629311
     # roll = 0#random()
     # pitch = 3.14#random()
     # yaw = 0#random()
@@ -63,8 +64,11 @@ if __name__ == "__main__":
     my_transformations = PandaTransformations()
     table_point = PointWithOrientation()
     
-    table_point.set_position(0.5, 0.5, 0)
+    table_point.set_position(0.0, 0.0, 0.0)
+    table_point.set_orientation(0.0, math.pi-0.01, 0.0)
     transformed_point = my_transformations.transform_table_to_base_link(table_point)
-    controller.move_to_pose(transformed_point.x, transformed_point.y, transformed_point.z, 0, 0, 0)
+    print(transformed_point.get_position())
+    print(transformed_point.get_orientation())
+    controller.move_to_pose(transformed_point.x, transformed_point.y, transformed_point.z, transformed_point.roll, transformed_point.pitch, transformed_point.yaw)
 
     rospy.spin()
