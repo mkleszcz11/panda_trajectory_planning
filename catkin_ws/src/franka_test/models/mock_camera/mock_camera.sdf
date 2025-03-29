@@ -6,7 +6,7 @@
 
     <link name="camera_link">
       <!-- Position above the ground -->
-      <pose>0 0 1.0 0 1.570796 0</pose> <!-- 90-degree rotation to face downward -->
+      <pose>0 0 0 0 1.570796 0</pose> <!-- 90-degree rotation to face downward -->
 
       <!-- Visual (appearance) -->
       <visual name="camera_visual">

@@ -46,10 +46,11 @@ class FrankaMotionController:
         point_4 = PointWithOrientation(0.3, 0.3, 0.1, 0.0, math.pi , math.pi/4.0)
 
         self.target_positions = [
-            panda_transformations.transform_point(point_1, 'table', 'base'),
-            panda_transformations.transform_point(point_2, 'table', 'base'),
-            panda_transformations.transform_point(point_3, 'table', 'base'),
-            panda_transformations.transform_point(point_4, 'table', 'base')
+            PointWithOrientation(0.5, 0.0, 0.5, math.pi, 0.0, -math.pi/4.0)
+            # panda_transformations.transform_point(point_1, 'table', 'base')
+            # panda_transformations.transform_point(point_2, 'table', 'base'),
+            # panda_transformations.transform_point(point_3, 'table', 'base'),
+            # panda_transformations.transform_point(point_4, 'table', 'base')
         ]
 
         # Storage for data comparison

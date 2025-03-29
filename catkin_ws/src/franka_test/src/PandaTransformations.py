@@ -21,46 +21,64 @@ class PandaTransformations:
             "bottom_right": np.array([0.09612144178867847, 0.41001726589279464, 0.19518941212650254]),
             "bottom_left": np.array([0.09329019345166721, -0.4108675959286945, 0.19623268710457104])
         }
-        
-        # Transformation matrices (initialized to identity)
+
+        # Transformation from base to table frame
         self.T_base_to_table = np.array([
             [0, -1, 0, self.table_corners["top_right"][0]],
             [1, 0, 0, self.table_corners["top_right"][1]],
             [0, 0, 1, self.table_corners["top_right"][2]],
             [0, 0, 0, 1]
         ])
-        self.T_base_to_camera = np.eye(4)
+
+        # Transformation from camera to table frame (code 0 - top right corner)
+        # It is used to compute the transformation from camera to base frame
+        temp_x_value =  - self.table_corners["top_right"][1] # in axis
+        temp_y_value = self.table_corners["top_right"][0] - 0.35 # as in launchfile
+        temp_z_value = 1.5 - self.table_corners["top_right"][2] # as in launchfile
+        self.T_table_to_camera = np.array([
+            [-1, 0, 0, temp_x_value],
+            [0, 1, 0, temp_y_value],
+            [0, 0, -1, temp_z_value],
+            [0, 0, 0, 1]
+        ])
+
+        # T_base_to_camera = T_base_to_table * T_table_to_camera
+        # T_table_to_camera = np.linalg.inv(self.T_camera_to_table)
+        self.T_base_to_camera = self.T_base_to_table @ self.T_table_to_camera
+
+        print(f"BASE TO CAMERA:\n{self.T_base_to_camera}")
+
+        # Transformation from camera to object frame will be updated based on object pose
         self.T_camera_to_object = np.eye(4)
 
-    def calibrate_camera(self, aruco_marker_positions):
+    def calibrate_camera(self) -> np.ndarray:
         """
-        Calibrate camera position based on known ArUco marker positions.
-        Input:
-            aruco_marker_positions: dict
-                Dictionary with marker IDs as keys and 3D positions in camera frame as values.
-                Example: {0: [x, y, z], 1: [x, y, z], ...}
-        Output:
-            np.ndarray: 4x4 transformation matrix from camera to table frame.
-        """
-        if len(aruco_marker_positions) != 4:
-            raise ValueError("Exactly 4 ArUco markers are required for calibration.")
-        
-        # Compute the transformation matrix using point-to-point alignment
-        camera_points = np.array(list(aruco_marker_positions.values()))
-        base_points = np.array(list(self.table_corners.values()))
-        
-        # Solve for transformation using Kabsch algorithm
-        H = camera_points.T @ base_points
-        U, S, Vt = np.linalg.svd(H)
-        R = Vt.T @ U.T
-        t = base_points.mean(axis=0) - R @ camera_points.mean(axis=0)
+        Calibrate camera position based on ArUco marker positions.
 
-        T_camera_to_table = np.eye(4)
-        T_camera_to_table[:3, :3] = R
-        T_camera_to_table[:3, 3] = t
+        Rerurns:
+            np.ndarray: 4x4 transformation matrix from camera to table frame (code 0 - top right corner)
+        """
+        pass
+        # return self.T_base_to_camera
+
+    def get_transformation_matrix_from_point(self, point: PointWithOrientation) -> np.ndarray:
+        """
+        Get transformation matrix from a point with orientation to the base frame.
         
-        self.T_base_to_camera = np.linalg.inv(T_camera_to_table)
-        return self.T_base_to_camera
+        Input:
+            point (PointWithOrientation): 3D point with orientation
+        Output:
+            np.ndarray: 4x4 transformation matrix
+        """
+        # Create rotation matrix from roll, pitch, yaw
+        rotation = R.from_euler('xyz', [point.roll, point.pitch, point.yaw]).as_matrix()
+
+        # Create transformation matrix
+        T = np.eye(4)
+        T[:3, :3] = rotation
+        T[:3, 3] = [point.x, point.y, point.z]
+
+        return T
 
     def get_transform(self, source_frame, target_frame):
         """
@@ -71,19 +89,15 @@ class PandaTransformations:
         Output:
             np.ndarray: 4x4 transformation matrix
         """
-        transforms = {
-            'base': np.eye(4),
-            'camera': self.T_base_to_camera,
-            'table': self.T_base_to_table,
-            'object': self.T_camera_to_object @ self.T_base_to_camera
-        }
-        if source_frame not in transforms or target_frame not in transforms:
-            raise ValueError(f"Invalid frame name: {source_frame}, {target_frame}")
-        print(f"---- Source frame: {source_frame}, Target frame: {target_frame}")
-        # Compute transformation matrix from source to target frame.
-        T_source_to_target = np.linalg.inv(transforms[target_frame]) @ transforms[source_frame]
-        print(f"---- T_source_to_target:\n{T_source_to_target}")
-        return T_source_to_target
+        T = np.eye(4)
+        if source_frame == 'camera' and target_frame == 'base':
+            T = self.T_base_to_camera
+        elif source_frame == 'base' and target_frame == 'camera':
+            T = np.linalg.inv(self.T_base_to_camera)
+        else:
+            print("?????????????????????????????????????")
+
+        return T
 
     def update_object_pose(self, object_pose_camera):
         """
@@ -113,6 +127,7 @@ class PandaTransformations:
         
         # Get the transformation matrix
         T = self.get_transform(source_frame, target_frame)
+
         print(f"---- T:\n{T}")
 
         # Transform position
@@ -137,37 +152,7 @@ class PandaTransformations:
 
         
 
-# Example usage:
-if __name__ == "__main__":
-    panda_tf = PandaTransformations()
-    
-    # Example ArUco marker calibration data (in camera frame)
-    aruco_positions = {
-        0: [0.1, 0.2, 0.3],
-        1: [0.4, 0.2, 0.3],
-        2: [0.1, -0.2, 0.3],
-        3: [-0.1, -0.2, 0.3]
-    }
-    
-    T_base_to_camera = panda_tf.calibrate_camera(aruco_positions)
-    print("Camera Calibration Result:\n", T_base_to_camera)
 
-    # Update object pose from camera frame
-    panda_tf.update_object_pose([0.5, 0.1, 0.2, 0, 0, 0])
-    
-    # Transform point from object to base frame
-    point = np.array([0.1, 0.2, 0.3])
-    transformed_point = panda_tf.transform_point(point, 'object', 'base')
-    print("Transformed Point:\n", transformed_point)
-
-
-
-
-
-
-
-
-# import math
 
 # class PointWithOrientation:
 #     """
