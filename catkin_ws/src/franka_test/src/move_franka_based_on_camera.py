@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 
+########################################################
+# Simulate that we see the object in the camera.
+# Then we move the robot to the object.
+# Goal of this code is to validate that transformations
+# are working correctly.
+########################################################
+
 import rospy
 import moveit_commander
 import moveit_msgs.msg
@@ -31,26 +38,18 @@ class FrankaMotionController:
         self.start_joint_config = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]  # Joint angles in radians
 
         panda_transformations = PandaTransformations()
-        # Define points in (x, y, z, roll, pitch, yaw)
-        # self.target_positions = [
-        #     panda_transformations.transform_table_to_base_link(point=PointWithOrientation(0,0,0)),
-        #     panda_transformations.transform_table_to_base_link(panda_transformations.table_corners["top_left"]),
-        #     panda_transformations.transform_table_to_base_link(panda_transformations.table_corners["bottom_right"]),
-        #     panda_transformations.transform_table_to_base_link(panda_transformations.table_corners["bottom_left"]),
-        # ]
 
-        # target_positions_in_table_coordinations
-        point_1 = PointWithOrientation(0.01, 0.01, 0, 0.0, math.pi , math.pi/4.0)
-        point_2 = PointWithOrientation(0.1, 0.1, 0.1, 0.0, math.pi , math.pi/4.0)
-        point_3 = PointWithOrientation(0.2, 0.2, 0.0, 0.0, math.pi , math.pi/4.0)
-        point_4 = PointWithOrientation(0.3, 0.3, 0.1, 0.0, math.pi , math.pi/4.0)
+        # Points in camera frame
+        point_1 = PointWithOrientation(0.0, 0.0, 1.1, 0.0, 0.0, -math.pi/4.0)
+        point_2 = PointWithOrientation(0.3, 0.3, 1.0, 0.0, 0.0, -math.pi/4.0)
+        point_3 = PointWithOrientation(-0.3, -0.3, 1.0, 0.0, 0.0, -math.pi/4.0)
+        point_4 = PointWithOrientation(0.0, 0.0, 1.0, 0.0, 0.0, -math.pi/4.0)
 
         self.target_positions = [
-            PointWithOrientation(0.5, 0.0, 0.5, math.pi, 0.0, -math.pi/4.0)
-            # panda_transformations.transform_point(point_1, 'table', 'base')
-            # panda_transformations.transform_point(point_2, 'table', 'base'),
-            # panda_transformations.transform_point(point_3, 'table', 'base'),
-            # panda_transformations.transform_point(point_4, 'table', 'base')
+            panda_transformations.transform_point(point_1, 'camera', 'base'),
+            panda_transformations.transform_point(point_2, 'camera', 'base'),
+            panda_transformations.transform_point(point_3, 'camera', 'base'),
+            panda_transformations.transform_point(point_4, 'camera', 'base')
         ]
 
         # Storage for data comparison
@@ -65,8 +64,10 @@ class FrankaMotionController:
         end_time = time.time()
         self.log_data(joint_config, "Fixed Joint Configuration", start_time, end_time)
 
-    def move_to_pose_trac_ik(self, x, y, z, roll, pitch, yaw):
+    def move_to_pose_trac_ik(self, position: PointWithOrientation):
         """Move the robot using TRAC-IK"""
+        x, y, z = position.x, position.y, position.z
+        roll, pitch, yaw = position.roll, position.pitch, position.yaw
         quaternion = tf_trans.quaternion_from_euler(roll, pitch, yaw)
         seed_state = np.random.uniform(self.lower_bounds, self.upper_bounds)  # Random seed
         joint_positions = self.ik_solver.get_ik(seed_state, x, y, z, *quaternion)
@@ -137,33 +138,54 @@ class FrankaMotionController:
     def execute(self):
         """Main execution sequence"""
 
-        # # Move to fixed starting joint configuration before each method
+        ####################
+        ##### TRACK IK #####
+        ####################
+        # # # Move to fixed starting joint configuration before each method
         # rospy.loginfo("Moving to Start Joint Configuration before TRAC-IK execution")
         # self.move_to_joint_config(self.start_joint_config)
 
         # rospy.loginfo("Executing predefined movements using TRAC-IK")
         # for pos in self.target_positions:
-        #     self.move_to_pose_trac_ik(*pos)
+        #     self.move_to_pose_trac_ik(pos)
 
+        ##########################
+        ##### MOVEIT PLANNER #####
+        ##########################
         rospy.loginfo("Returning to Start Joint Configuration before trajectory planner execution")
         self.move_to_joint_config(self.start_joint_config)
 
-        rospy.loginfo("Executing predefined movements using a Trajectory Planner")
+        # Add a table as an obstacle
+        box_pose = geometry_msgs.msg.PoseStamped()
+        box_pose.header.frame_id = self.robot.get_planning_frame()  # typically "panda_link0" or "world"
+        box_pose.pose.position.x = 0.4
+        box_pose.pose.position.y = 0.0
+        box_pose.pose.position.z = 0.19  # box center height
+        box_pose.pose.orientation.w = 1.0  # neutral orientation
 
-        # Transform the list of PointWithOrientation objects to a list of lists
-        # list_of_poses = [pos.get_position_and_orientation_as_list() for pos in self.target_positions]
-        # print(f"List of poses: {list_of_poses}")
+        self.scene.add_box("table_box", box_pose, size=(0.6, 0.8, 0.02))  # (x, y, z) dimensions in meters
+        rospy.sleep(1.0)  # Give time for the scene to update
+
+        rospy.loginfo("Executing predefined movements using MoveIt Trajectory Planner")
         for pos in self.target_positions:
             print(f"Moving to position: {pos}, type: {type(pos)}")
-            # pos = pos.get_position_and_orientation_as_list()
+            rospy.loginfo(f"Moving to position: {pos}")
             self.move_to_pose_planner(pos)
 
+        ####################################
+        #### CUSTOM TRAJECTORY PLANNER #####
+        ####################################
         rospy.loginfo("Returning to Start Joint Configuration after execution")
         self.move_to_joint_config(self.start_joint_config)
 
-        # Save data for comparison
-        self.save_data()
-        rospy.loginfo("Execution complete.")
+        rospy.loginfo("Executing predefined movements using custom Trajectory Planner")
+        for pos in self.target_positions:
+            pass
+
+
+        # # Save data for comparison
+        # self.save_data()
+        # rospy.loginfo("Execution complete.")
 
 if __name__ == "__main__":
     controller = FrankaMotionController()

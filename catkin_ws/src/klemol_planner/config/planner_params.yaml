@@ -1,0 +1,15 @@
+rrt:
+  step_size: 0.1        # step between nodes TODO -> WHAT IS THE UNIT (rad)
+  bias: 0.5  # Probability of sampling the goal (for biasing)
+  max_iterations: 25000
+  max_time: 25.0 # max time to run the planner (s)
+
+rrt_star:
+  step_size: 0.05 # PLACEHOLER
+  max_iterations: 1500 # PLACEHOLER
+  goal_sample_rate: 0.2 # PLACEHOLER
+  neighbour_radius: 0.3 # PLACEHOLER
+
+prm:
+  num_samples: 500 # PLACEHOLER
+  k_neighbors: 10 # PLACEHOLER (maybe radius instead of k?)

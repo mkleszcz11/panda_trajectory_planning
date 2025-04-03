@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Include the existing demo_gazebo.launch -->
+  <include file="$(find panda_moveit_config)/launch/demo_gazebo.launch" />
+
+  <!-- Spawn a table as a simple slab -->
+  <node name="spawn_table" pkg="gazebo_ros" type="spawn_model"
+        args="-file $(find franka_test)/models/table/table.sdf -sdf -model table -x 0 -y 0 -z 0" />
+
+  <!-- Spawn Camera -->
+  <node name="spawn_camera" pkg="gazebo_ros" type="spawn_model"
+        args="-file $(find franka_test)/models/mock_camera/mock_camera.sdf -sdf -model mock_camera -x 0.35 -y 0 -z 1.5" />
+
+  <!-- Spawn a red box somewhere on a table -->
+  <node name="spawn_red_box" pkg="gazebo_ros" type="spawn_model"
+        args="-file $(find franka_test)/models/test_box/test_box.sdf -sdf -model test_box -x 0.3 -y 0.3 -z 0.4" />
+</launch>

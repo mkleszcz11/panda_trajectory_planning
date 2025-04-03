@@ -11,25 +11,8 @@ __pycache__/
 # Ignore log files
 *.log
 
-# Ignore macOS system files
-.DS_Store
-
-# Ignore Windows system files
-Thumbs.db
-
-# Ignore generated benchmark files
-*.csv
-
-# Ignore test artifacts
-coverage/
-test-results/
-
-# Ignore IDE files
-.idea/
-.vscode/
-*.iml
-
-# Ignore temporary files
-*.swp
-*.swo
-*~
+catkin_ws/build/
+catkin_ws/devel/
+catkin_ws/install/
+catkin_ws/src/franka_test/src/__pycache__/
+catkin_ws/.catkin_workspace

@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Start Gazebo -->
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(find gazebo_ros)/worlds/empty.world" />
+    <arg name="paused" value="false" />
+    <arg name="use_sim_time" value="true" />
+    <arg name="gui" value="true" />
+  </include>
+
+  <!-- Spawn Mock Camera -->
+  <node name="spawn_mock_camera" pkg="gazebo_ros" type="spawn_model"
+        args="-file $(find franka_test)/urdf/mock_camera_minimal.urdf -urdf -model mock_camera_minimal -x 0.5 -y 0 -z 0.5" />
+
+  <!-- <node name="spawn_mock_camera" pkg="gazebo_ros" type="spawn_model"
+        args="-file $(find franka_test)/urdf/mock_camera_minimal.urdf -urdf -model mock_camera_minimal -x 0.5 -y 0 -z 1.5" /> -->
+</launch>
