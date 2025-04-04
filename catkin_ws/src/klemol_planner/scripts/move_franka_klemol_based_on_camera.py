@@ -104,7 +104,9 @@ class FrankaMotionController:
         point_2 = PointWithOrientation(0.3, 0.3, 1.0, 0.0, 0.0, -math.pi/4.0)
         point_3 = PointWithOrientation(-0.3, -0.3, 1.0, 0.0, 0.0, -math.pi/4.0)
         point_4 = PointWithOrientation(0.0, 0.0, 1.0, 0.0, 0.0, -math.pi/4.0)
-        
+
+        table_corner_0 = PointWithOrientation(0.0, 0.0, 0.001, 0.0, math.pi, 0.0)
+
         print("TRYING TO FIND A CUSTOM OBJECT")
         object_detector = ObjectDetector()
         is_object_detected, object_transformation_matrix = object_detector.detect_objects_and_get_transformation(None)
@@ -121,7 +123,8 @@ class FrankaMotionController:
         print("OBJECT DETECTION DONE")
 
         self.target_positions = [
-            panda_transformations.transform_point(point_1, 'camera', 'base')#,
+            panda_transformations.transform_point(table_corner_0, 'table', 'base')
+            # panda_transformations.transform_point(point_1, 'camera', 'base')#,
             # panda_transformations.transform_point(point_2, 'camera', 'base'),
             # panda_transformations.transform_point(point_3, 'camera', 'base'),
             # panda_transformations.transform_point(point_4, 'camera', 'base')
@@ -276,13 +279,13 @@ class FrankaMotionController:
         ####################################
         #### CUSTOM TRAJECTORY PLANNER #####
         ####################################
-        rospy.loginfo("Returning to Start Joint Configuration after execution")
-        self.move_to_joint_config(self.start_joint_config)
+        # rospy.loginfo("Returning to Start Joint Configuration after execution")
+        # self.move_to_joint_config(self.start_joint_config)
 
-        # Close gripper, wait 10s, open gripper
-        self.move_gripper(False)
-        rospy.sleep(10)
-        self.move_gripper(True)
+        # # Close gripper, wait 10s, open gripper
+        # self.move_gripper(False)
+        # rospy.sleep(10)
+        # self.move_gripper(True)
 
         # rospy.loginfo("Executing predefined movements using custom Trajectory Planner")
         # for pos in self.target_positions:
