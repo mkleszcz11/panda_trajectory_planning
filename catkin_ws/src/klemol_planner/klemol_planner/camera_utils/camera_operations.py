@@ -1,38 +1,74 @@
+import math
 import typing as t
-import pyrealsense2 as rs
 import numpy as np
 import cv2
+import os
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+try:
+    import pyrealsense2 as rs
+except ImportError:
+    print("RealSense SDK not found. Camera operations will be limited to hardcoded intrinsics.")
+    rs = None
+
 
 class CameraOperations:
     def __init__(self):
         """
-        Initialize the RealSense D455 camera and align depth to color stream.
+        Initialize the RealSense D435i camera and align depth to color stream.
+        If no camera is present (USE_REALSENSE = False), fallback to hardcoded intrinsics.
         """
-        self.pipeline = rs.pipeline()
-        config = rs.config()
-        config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-        config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+        self.USE_REALSENSE = False  # Toggle to False if no camera is connected
 
-        self.pipeline.start(config)
-        align_to = rs.stream.color
-        self.align = rs.align(align_to)
+        if self.USE_REALSENSE:
+            self.pipeline = rs.pipeline()
+            config = rs.config()
+            config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
+            config.enable_stream(rs.stream.color, 1920, 1080, rs.format.bgr8, 30)
 
+            try:
+                self.pipeline.start(config)
+                align_to = rs.stream.color
+                self.align = rs.align(align_to)
+
+                profile = self.pipeline.get_active_profile()
+                color_stream = profile.get_stream(rs.stream.color).as_video_stream_profile()
+                intr = color_stream.get_intrinsics()
+
+                self.camera_matrix = np.array([
+                    [intr.fx, 0, intr.ppx],
+                    [0, intr.fy, intr.ppy],
+                    [0, 0, 1]
+                ])
+                self.dist_coeffs = np.array(intr.coeffs)
+
+            except Exception as e:
+                print("Could not start RealSense camera, falling back to defaults.")
+                self.USE_REALSENSE = False
+                self.pipeline = None
+                self._use_default_intrinsics()
+
+        else:
+            self.pipeline = None
+            self._use_default_intrinsics()
+
+        # ArUco dictionary and detector
         self.dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
         self.parameters = cv2.aruco.DetectorParameters()
         self.detector = cv2.aruco.ArucoDetector(self.dictionary, self.parameters)
+        self.marker_length = 0.05  # meters
 
-        self.marker_length = 0.04  # [m] physical marker size
-
-        # Load camera intrinsics from RealSense
-        profile = self.pipeline.get_active_profile()
-        color_stream = profile.get_stream(rs.stream.color).as_video_stream_profile()
-        intr = color_stream.get_intrinsics()
+    def _use_default_intrinsics(self):
+        """
+        Use default intrinsics for D435i @ 1920x1080.
+        """
         self.camera_matrix = np.array([
-            [intr.fx, 0, intr.ppx],
-            [0, intr.fy, intr.ppy],
-            [0, 0, 1]
+            [1380.0, 0, 960.0],
+            [0, 1380.0, 540.0],
+            [0, 0, 1.0]
         ])
-        self.dist_coeffs = np.array(intr.coeffs)
+        self.dist_coeffs = np.zeros(5)
 
     def get_image(self) -> t.Tuple[np.ndarray, np.ndarray]:
         """
@@ -42,73 +78,143 @@ class CameraOperations:
             color_image: BGR image
             depth_frame: aligned depth frame
         """
-        frames = self.pipeline.wait_for_frames()
-        aligned_frames = self.align.process(frames)
-        color_frame = aligned_frames.get_color_frame()
-        depth_frame = aligned_frames.get_depth_frame()
+        try:
+            frames = self.pipeline.wait_for_frames()
+            aligned_frames = self.align.process(frames)
+            color_frame = aligned_frames.get_color_frame()
+            depth_frame = aligned_frames.get_depth_frame()
 
-        if not color_frame or not depth_frame:
-            raise RuntimeError("Could not get frames from RealSense camera")
+            if not color_frame or not depth_frame:
+                raise RuntimeError("Could not get frames from RealSense camera")
 
-        color_image = np.asanyarray(color_frame.get_data())
-        return color_image, depth_frame
+            color_image = np.asanyarray(color_frame.get_data())
+            return color_image, depth_frame
+        except:
+            # If RealSense is not available, use a reference image
+            this_file_dir = os.path.dirname(os.path.abspath(__file__))
+            reference_image_path = os.path.join(this_file_dir, "reference_image.png")
+            color_image = cv2.imread(reference_image_path)
+            # Assume depth is 1.2 meters for all pixels
+            depth_frame = np.full(color_image.shape[:2], 1.2, dtype=np.float32)
+            return color_image, depth_frame
 
-    def find_aruco_codes_in_the_image(self) -> t.List[t.Tuple[int, np.ndarray]]:
+    # def find_aruco_codes_in_the_image(self) -> t.List[t.Tuple[int, np.ndarray, np.ndarray]]:
+    #     """
+    #     Detect ArUco markers and return their translation and a fixed upward-pointing rotation.
+
+    #     Returns:
+    #         List of (marker_id, tvec, rvec)
+    #     """
+    #     color_image, depth_frame = self.get_image()
+    #     corners, ids, _ = self.detector.detectMarkers(color_image)
+    #     print(f"ALL CORNERS:\n{corners}")
+    #     if ids is None:
+    #         return []
+
+    #     detected_markers = []
+
+    #     for i, corner in enumerate(corners):
+    #         marker_id = int(ids[i][0])
+
+    #         # Compute center of marker for depth lookup
+    #         cx = int(corner[0][:, 0].mean())
+    #         cy = int(corner[0][:, 1].mean())
+
+    #         cv2.putText(
+    #             color_image,
+    #             f"ID: {marker_id}",
+    #             (cx + 10, cy - 10),
+    #             cv2.FONT_HERSHEY_SIMPLEX,
+    #             0.5,
+    #             (0, 255, 0),
+    #             2,
+    #             cv2.LINE_AA
+    #         )
+
+    #         if self.USE_REALSENSE:
+    #             z_depth = depth_frame.get_distance(cx, cy)
+    #         else:
+    #             z_depth = 1.2  # fallback
+
+    #         # Compute marker center in image frame using projection matrix
+    #         uv_point = np.array([[cx], [cy], [1.0]])
+    #         camera_matrix_inv = np.linalg.inv(self.camera_matrix)
+    #         xyz_camera = camera_matrix_inv @ uv_point * z_depth
+    #         tvec = xyz_camera.flatten().reshape(3, 1)
+
+    #         # Construct a fixed "upward-pointing" rvec
+    #         # Assume marker normal is aligned with +Z in world, so rotation is identity
+    #         # rvec = [0, 0, 0] (no rotation)
+    #         rvec = np.zeros((3, 1), dtype=np.float32)
+
+    #         # Visualization
+    #         cv2.drawFrameAxes(color_image, self.camera_matrix, self.dist_coeffs, rvec, tvec, 0.23)
+    #         cv2.putText(color_image, f"ID: {marker_id}", (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+    #         detected_markers.append((marker_id, tvec.flatten(), rvec.flatten()))
+
+    #     cv2.imshow("ArUco Detection", cv2.resize(color_image, (1280, 720)))
+    #     cv2.waitKey(0)
+
+    #     return detected_markers
+
+    def find_aruco_codes_in_the_image(self) -> t.List[t.Tuple[int, np.ndarray, np.ndarray]]:
         """
-        Detect ArUco markers and return translation vectors.
+        Detect ArUco markers and return their translation and rotation vectors.
 
         Returns:
-            List of (marker_id, translation_vector) in meters.
+            List of (marker_id, tvec, rvec)
         """
-        color_image, _ = self.get_image()
+        color_image, depth_frame = self.get_image()
         corners, ids, _ = self.detector.detectMarkers(color_image)
+        print(f"ALL CORNERS:\n{corners}")
         if ids is None:
             return []
 
         detected_markers = []
 
         for i, corner in enumerate(corners):
-            rvec, tvec = self.estimate_pose_single_marker(
-                corner, self.marker_length, self.camera_matrix, self.dist_coeffs)
+            marker_id = int(ids[i][0])
 
-            # Approximate center of the marker
+            # Marker center for depth lookup
             cx = int(corner[0][:, 0].mean())
             cy = int(corner[0][:, 1].mean())
 
-            # Get aligned depth frame again to extract accurate Z
-            _, depth_frame = self.get_image()
-            z_depth = depth_frame.get_distance(cx, cy)
+            marker_id = int(ids[i][0])
+            cv2.putText(
+                color_image,
+                f"ID: {marker_id}",
+                (cx + 10, cy - 10),  # slightly offset from the center
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,                # font scale
+                (0, 255, 0),        # green text
+                2,                  # thickness
+                cv2.LINE_AA
+            )
+
+            if self.USE_REALSENSE:
+                z_depth = depth_frame.get_distance(cx, cy)
+            else:
+                z_depth = 1.2  # fallback
+
+            # Estimate pose
             rvec, tvec = self.estimate_pose_single_marker(
                 corner, self.marker_length, self.camera_matrix, self.dist_coeffs, z_override=z_depth
             )
+            tvec[2][0] = z_depth  # enforce correct Z
 
-            # Replace only the Z component with sensor-based depth
-            tvec[2][0] = z_depth
+            detected_markers.append((marker_id, tvec.flatten(), rvec.flatten()))
 
-            cv2.aruco.drawDetectedMarkers(color_image, corners)
-            # Project marker center (0,0,0) into image to verify alignment
-            image_point, _ = cv2.projectPoints(
-                np.array([[0.0, 0.0, 0.0]]),  # marker origin
-                rvec, tvec,
-                self.camera_matrix, self.dist_coeffs
-            )
-            u, v = tuple(image_point[0][0].astype(int))
-            cv2.circle(color_image, (u, v), 5, (255, 0, 0), -1)  # Yellow dot at projected marker origin
+            # Visualization
+            cv2.drawFrameAxes(color_image, self.camera_matrix, self.dist_coeffs, rvec, tvec, 0.23)
+            cv2.putText(color_image, f"ID: {marker_id}", (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-            # Draw axis too
-            cv2.drawFrameAxes(color_image, self.camera_matrix, self.dist_coeffs, rvec, tvec, 0.03)
-
-            detected_markers.append((int(ids[i][0]), tvec.flatten()))
-
-        cx = int(self.camera_matrix[0, 2])
-        cy = int(self.camera_matrix[1, 2])
-        cv2.circle(color_image, (cx, cy), 5, (255, 0, 0), -1)  # Blue dot at optical center
-        cv2.imshow("ArUco Detection", color_image)
-        cv2.waitKey(1)
+        # cv2.imshow("ArUco Detection", color_image)
+        # Show it in scale
+        cv2.imshow("ArUco Detection", cv2.resize(color_image, (1280, 720)))
+        cv2.waitKey(0)
 
         return detected_markers
-
-        # return [(int(ids[i][0]), tvecs[i][0]) for i in range(len(ids))]
 
     def estimate_pose_single_marker(self, corners, marker_length, camera_matrix, dist_coeffs, z_override=None):
         """
@@ -134,25 +240,138 @@ class CameraOperations:
 
         img_points = corners.reshape(-1, 2).astype(np.float32)
         success, rvec, tvec = cv2.solvePnP(obj_points, img_points, camera_matrix, dist_coeffs)
+        # print(f"PNP RETURNING rvec =\n{rvec}, tvec =\n{tvec}")
 
         if z_override is not None:
             # Scale the tvec so that its Z matches the depth reading
             scale = z_override / tvec[2][0]
             tvec = tvec * scale
 
+        # =====================
+        # DEBUG INFO
+        # =====================
+        rotation_matrix, _ = cv2.Rodrigues(rvec)
+        yaw = np.arctan2(rotation_matrix[1, 0], rotation_matrix[0, 0])
+
+        print("[DEBUG] solvePnP result:")
+        print(f"  Image Points (px):\n{img_points}")
+        print(f"  Estimated tvec (camera → marker): {tvec.ravel()}  [x, y, z] (m)")
+        print(f"  Estimated rvec: {rvec.ravel()}")
+        print(f"  Estimated yaw (Z rotation): {np.degrees(yaw):.2f}°\n")
+
         return rvec, tvec
 
-    def get_translation_of_marker_0(self) -> t.List[float]:
+    def get_marker_transforms(self) -> t.Dict[str, np.ndarray]:
         """
+        Get full 4x4 transformation matrices from each marker to camera.
+        We are assuming rotation only around te Z axis.
+
         Returns:
-            Translation vector of marker ID 0 in meters: [x, y, z]
+            Dict: {"corner_0": T_4x4, "corner_1": T_4x4, ...}
         """
-        print("GETTING TRANSLATION OF MARKER 0")
+        print("Getting marker transforms...")
+        transforms = {}
         markers = self.find_aruco_codes_in_the_image()
-        for marker_id, translation in markers:
-            if marker_id == 0:
-                return translation.tolist()
-        raise ValueError("Marker ID 0 not found.")
+
+        for marker_id, tvec, rvec in markers:
+            R_mat, _ = cv2.Rodrigues(rvec)  # Convert rotation vector to matrix
+
+            T = np.eye(4)
+            T[:3, :3] = R_mat
+            T[:3, 3] = np.asarray(tvec).flatten()
+
+            transforms[f"corner_{marker_id}"] = T
+        # for marker_id, tvec, rvec in markers:
+        #     # Only rotation in Z axis
+        #     yaw = rvec[2]
+        #     cos_yaw = np.cos(yaw)
+        #     sin_yaw = np.sin(yaw)
+        #     R_z = np.array([
+        #         [cos_yaw, -sin_yaw, 0],
+        #         [sin_yaw,  cos_yaw, 0],
+        #         [0, 0, 1]
+        #     ])
+
+        #     # Flip and rotate to match world alignment
+        #     R_flip_x = np.array([
+        #         [1, 0, 0],
+        #         [0, -1, 0],
+        #         [0, 0, -1]
+        #     ])
+        #     R_rot_z_270 = np.array([
+        #         [0, 1, 0],
+        #         [-1, 0, 0],
+        #         [0, 0, 1]
+        #     ])
+        #     R_final = R_flip_x @ R_z
+
+        #     T = np.eye(4)
+        #     T[:3, :3] = R_final
+        #     T[:3, 3] = tvec
+
+        #     transforms[f"corner_{marker_id}"] = T
+
+        # Sort by marker ID before returning
+        transforms = dict(sorted(transforms.items(), key=lambda item: int(item[0].split("_")[1])))
+        print(f"Detected markers: {transforms.keys()}")
+
+        # Print the transformation matrices
+        for marker_id, T in transforms.items():
+            print(f"Marker {marker_id} transform:\n{T}")
+
+        # =======================
+        # 3D Visualization
+        # =======================
+        fig = plt.figure(figsize=(8, 6))
+        ax = fig.add_subplot(111, projection='3d')
+        ax.set_title("Detected Marker Positions (Camera Frame)")
+
+        for corner_name, T in transforms.items():
+            # pos = T[:3, 3]
+            
+            # # Draw as orange spheres
+            # ax.scatter(*pos, s=100, color='orange', label=corner_name)
+            # ax.text(*pos, corner_name, fontsize=9, color='black')
+            origin = T[:3, 3]
+            R = T[:3, :3]
+
+            # Frame axes (x=red, y=green, z=blue)
+            ax.quiver(*origin, *R[:, 0], length=0.15, color='r')  # X
+            ax.quiver(*origin, *R[:, 1], length=0.15, color='g')  # Y
+            ax.quiver(*origin, *R[:, 2], length=0.15, color='b')  # Z
+
+            ax.text(*origin, corner_name, fontsize=9, color='k')
+
+        # Draw camera coordinate frame at origin
+        ax.quiver(0, 0, 0, 0.25, 0, 0, color='r', linestyle='dashed', label='Cam X')
+        ax.quiver(0, 0, 0, 0, 0.25, 0, color='g', linestyle='dashed', label='Cam Y')
+        ax.quiver(0, 0, 0, 0, 0, 0.25, color='b', linestyle='dashed', label='Cam Z')
+        ax.text(0, 0, 0.05, "Camera Frame", fontsize=10, color='black')
+
+        ax.set_xlabel("X [m]")
+        ax.set_ylabel("Y [m]")
+        ax.set_zlabel("Z [m]")
+
+        # Equal aspect ratio
+        max_range = np.array([
+            ax.get_xlim3d(),
+            ax.get_ylim3d(),
+            ax.get_zlim3d()
+        ]).ptp(axis=1).max() / 2.0
+
+        mid_x = np.mean(ax.get_xlim3d())
+        mid_y = np.mean(ax.get_ylim3d())
+        mid_z = np.mean(ax.get_zlim3d())
+
+        ax.set_xlim(mid_x - max_range, mid_x + max_range)
+        ax.set_ylim(mid_y - max_range, mid_y + max_range)
+        ax.set_zlim(mid_z - max_range, mid_z + max_range)
+
+        ax.view_init(elev=30, azim=60)
+        plt.tight_layout()
+        # plt.show()
+
+        return transforms
 
     def show_rgb_and_depth(self):
         """
@@ -186,15 +405,198 @@ class CameraOperations:
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-if __name__ == "__main__":
-    cam = CameraOperations()
-    while True:
-        try:
-            x, y, z = cam.get_translation_of_marker_0()
-            print(f"Marker location: x={x:.3f}, y={y:.3f}, z={z:.3f} m")
-        except ValueError:
-            print("Marker ID 0 not detected.")
+    def find_tennis(self):
+
+        color_image, depth = self.get_image()
+
+        gray = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
+        gray = cv2.medianBlur(gray, 5)
+
+        # Convert to HSV for color-based filtering
+        hsv = cv2.cvtColor(color_image, cv2.COLOR_BGR2HSV)
+
+        # Define HSV range for the green/yellow ball
+        lower_yellow = np.array([40, 100, 130])  # Lower bound
+        upper_yellow = np.array([90, 255, 255])  # Upper bound
+
+        # Create a binary mask
+        mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
+
+        # Apply morphological closing (dilate -> erode) to fill holes
+        kernel = np.ones((5, 5), np.uint8)  # Adjust kernel size as needed
+        mask_closed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+
+        # Resize mask to show it
+        # mask_resized = cv2.resize(mask_closed, (1920, 1080))
+        # cv2.imshow("Mask", mask_resized)
+        cv2.imshow("Mask", mask_closed)
+        # cv2.waitKey(0)
+
+        contours, _ = cv2.findContours(mask_closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        clean_mask = np.zeros_like(mask_closed)
+
+        min_area = math.pi*10*10
+
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            if area >= min_area:
+                    cv2.drawContours(clean_mask, [cnt], -1, 255, thickness=cv2.FILLED)
+
+
+        # Apply bitwise AND to isolate the green/yellow parts of the image
+        color_filtered = cv2.bitwise_and(gray, gray, mask=clean_mask)
+
+        # Apply Gaussian blur to the binary image to create edge gradients
+        blurred = cv2.GaussianBlur(clean_mask, (9, 9), 2)
+
+        cv2.imshow("Filtered", blurred)
+        # cv2.waitKey(0)
+
+        # Apply Hough Circle Transform on the blurred mask
+        circles = cv2.HoughCircles(
+            blurred,
+            cv2.HOUGH_GRADIENT,
+            dp=1.2,
+            minDist=30,
+            param1=50,     # Higher threshold for Canny edge detector
+            param2=25,     # Lower this to detect more circles (sensitivity)
+            minRadius=30,  # Adjusted based on your mask
+            maxRadius=50
+        )
+
+        if circles is not None:
+            circles = np.uint16(np.around(circles))  # Round the values
+            largest_circle = max(circles[0, :], key=lambda c: c[2])
+            x, y, r = largest_circle
+            print(f"Largest circle: center=({x}, {y}), radius={r}")
+
+            # Draw the circle
+            cv2.circle(color_image, (x, y), r, (100, 255, 0), 3)
+            # Draw the circle's center
+            cv2.circle(color_image, (x, y), 2, (0, 0, 255), 3)
+
+            # Display the original image with detected circles
+            # Resize image to show it
+            # img_resized = cv2.resize(color_image, (1280, 720))
+            cv2.imshow("Detected Tennis Balls", color_image)
+            cv2.waitKey(1)
+            cv2.destroyAllWindows()
+
+            # Access the first ball's pixel coordinate
+            u, v = x, y  # Pixel coordinates of the circle's center
+
+            # Get dimensions of the depth frame
+            depth_width = depth.get_width()
+            depth_height = depth.get_height()
+            print(f"Depth frame dimensions: {depth_width} x {depth_height}")
+
+            # Get dimensions of the color frame (image resolution from the HoughCircles detection)
+            color_height, color_width = color_image.shape[:2]
+            print(f"Color frame dimensions: {color_width} x {color_height}")
+
+            # Rescale the circle's coordinates (u, v) if resolutions differ
+            u_rescaled = int(u * (depth_width / color_width))
+            v_rescaled = int(v * (depth_height / color_height))
+            print(f"Rescaled pixel coordinate of ball center: ({u_rescaled}, {v_rescaled})")
+
+            # Get depth value using the rescaled coordinates
+            depth_value = depth.get_distance(u_rescaled, v_rescaled)  # Depth at the new scaled coordinates
+            print(f"Depth at ball center (meters): {depth_value}")
+
+            # REMOVE REMOVE
+            depth_value_kek = depth.get_distance(x, y)  # Depth at the new scaled coordinates
+            print(f"Depth at ball center (meters) KEK: {depth_value_kek}")
+            # REMOVE REMOVE
+
+            # Load camera intrinsics from RealSense
+            profile = self.pipeline.get_active_profile()
+            color_stream = profile.get_stream(rs.stream.color).as_video_stream_profile()
+            intrinsics = color_stream.get_intrinsics()
+            self.camera_matrix = np.array([
+                [intrinsics.fx, 0, intrinsics.ppx],
+                [0, intrinsics.fy, intrinsics.ppy],
+                [0, 0, 1]
+            ])
+            self.dist_coeffs = np.array(intrinsics.coeffs)
+
+            width = color_width
+            height = color_height
+
+            result = self.convert_depth_to_phys_coord_using_realsense(u_rescaled, v_rescaled, depth_value, self.camera_matrix,
+                                                                        self.dist_coeffs, width, height)
+            print(f"Real-world coordinates of ball center (meters): {result}")
+            print(f"KEKEKEKEKEKEK returning {result}, type {type(result)}")
+            return True, result[0], result[1], result[2]
+        else:
+            print("No circles detected.")
+            return False, 0, 0, 0
+
+    def convert_depth_to_phys_coord_using_realsense(self, x, y, depth, camera_matrix, dist_coeffs, width, height):
+        """
+        Convert depth and pixel coordinates to 3D physical coordinates using RealSense intrinsics.
+
+        Args:
+            x (int): The x-coordinate (pixel) of the point in the image.
+            y (int): The y-coordinate (pixel) of the point in the image.
+            depth (float): The depth value at the given pixel (in meters).
+            camera_matrix (np.ndarray): Camera intrinsic matrix (K).
+            dist_coeffs (np.ndarray): Distortion coefficients (D).
+            width (int): Width of the camera frame.
+            height (int): Height of the camera frame.
+
+        Returns:
+            tuple: A tuple (X, Y, Z) representing the 3D coordinates in the camera frame.
+                X (float): The physical X-coordinate (right).
+                Y (float): The physical Y-coordinate (down).
+                Z (float): The physical Z-coordinate (forward).
+        """
+        # Parse the camera intrinsics
+        intrinsics = rs.intrinsics()
+        intrinsics.width = width
+        intrinsics.height = height
+        intrinsics.ppx = camera_matrix[0, 2]  # Principal point x (cx)
+        intrinsics.ppy = camera_matrix[1, 2]  # Principal point y (cy)
+        intrinsics.fx = camera_matrix[0, 0]  # Focal length x (fx)
+        intrinsics.fy = camera_matrix[1, 1]  # Focal length y (fy)
+        intrinsics.model = rs.distortion.none  # Assuming no distortion model
+        intrinsics.coeffs = [i for i in dist_coeffs]  # Distortion coefficients
+
+        # Use RealSense SDK to deproject pixel to 3D point
+        result = rs.rs2_deproject_pixel_to_point(intrinsics, [x, y], depth)
+
+        # RealSense output [right (X), down (Y), forward (Z)].
+        return result[0], result[1], result[2]
 
 # if __name__ == "__main__":
 #     cam = CameraOperations()
-#     cam.show_rgb_and_depth()
+#     while True:
+#         try:
+#             x, y, z = cam.get_corners_translations()
+#             print(f"Marker location: x={x:.3f}, y={y:.3f}, z={z:.3f} m")
+#         except ValueError:
+#             print("Marker ID 0 not detected.")
+
+# if __name__ == "__main__":
+#     cam = CameraOperations()
+#     while True:
+#         try:
+#             transforms = cam.get_marker_transforms()
+#             for marker_id, T in transforms.items():
+#                 print(f"Marker {marker_id} transform:\n{T}")
+#             # x,y,z = cam.find_tennis()
+#         except ValueError:
+#             print("Marker ID 0 not detected.")
+
+# if __name__ == "__main__":
+#     cam = CameraOperations()
+#     while True:
+#         try:
+#             cam.find_aruco_codes_in_the_image()
+#             # print(f"Marker location: x={x:.3f}, y={y:.3f}, z={z:.3f} m")
+#             # x,y,z = cam.find_tennis()
+#         except ValueError:
+#             print("Some marker was not detected.")
+
+if __name__ == "__main__":
+    cam = CameraOperations()
+    cam.show_rgb_and_depth()

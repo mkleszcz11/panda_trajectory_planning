@@ -30,6 +30,8 @@ from klemol_planner.utils.config_loader import load_planner_params
 import actionlib
 from franka_gripper.msg import GraspAction, GraspGoal, MoveAction, MoveGoal
 
+from klemol_planner.camera_utils.camera_operations import CameraOperations
+
 class FrankaMotionController:
     def __init__(self):
         rospy.init_node("franka_motion_controller")
@@ -49,23 +51,24 @@ class FrankaMotionController:
         ##################################
         ######### CUSTOM STUFF ###########
         ##################################
-        panda_transformations = PandaTransformations()
+        camera_operations = CameraOperations()
+        panda_transformations = PandaTransformations(cam_operations=camera_operations)
 
-        # Points in camera frame
-        point_1 = PointWithOrientation(0.0, 0.0, 1.09, 0.0, 0.0, math.pi * 0.75)
-        point_2 = PointWithOrientation(0.0, 0.1, 1.09, 0.0, 0.0, math.pi * 0.75)
-        point_3 = PointWithOrientation(0.2307, -0.0728, 1.2, 0.0, 0.0, math.pi * 0.75)
-        point_4 = PointWithOrientation(0.3, -0.3, 1.0, 0.0, 0.0, math.pi * 0.75)
+        # # Points in camera frame
+        # point_1 = PointWithOrientation(0.0, 0.0, 1.09, 0.0, 0.0, math.pi * 0.75)
+        # point_2 = PointWithOrientation(0.0, 0.1, 1.09, 0.0, 0.0, math.pi * 0.75)
+        # point_3 = PointWithOrientation(0.2307, -0.0728, 1.2, 0.0, 0.0, math.pi * 0.75)
+        # point_4 = PointWithOrientation(0.3, -0.3, 1.0, 0.0, 0.0, math.pi * 0.75)
 
-        aruco_3_in_camera = PointWithOrientation(0.62, -0.16, 1.1, 0.0, 0.0, math.pi * 0.75)
+        # aruco_3_in_camera = PointWithOrientation(0.62, -0.16, 1.1, 0.0, 0.0, math.pi * 0.75)
 
-        self.target_positions = [
-            panda_transformations.transform_point(point_1, 'camera', 'base'),
-            # panda_transformations.transform_point(point_2, 'camera', 'base'),
-            panda_transformations.transform_point(aruco_3_in_camera, 'camera', 'base'),
-            panda_transformations.transform_point(point_3, 'camera', 'base')
-            # panda_transformations.transform_point(point_4, 'camera', 'base')
-        ]
+        # self.target_positions = [
+        #     panda_transformations.transform_point(point_1, 'camera', 'base'),
+        #     # panda_transformations.transform_point(point_2, 'camera', 'base'),
+        #     panda_transformations.transform_point(aruco_3_in_camera, 'camera', 'base'),
+        #     panda_transformations.transform_point(point_3, 'camera', 'base')
+        #     # panda_transformations.transform_point(point_4, 'camera', 'base')
+        # ]
 
         # Load config paths
         pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner")
@@ -98,31 +101,65 @@ class FrankaMotionController:
         # Define fixed joint configuration for consistent execution
         self.start_joint_config = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]  # Joint angles in radians
         # Points in camera frame
-        point_1 = PointWithOrientation(0.0, 0.0, 1.1, 0.0, 0.0, -math.pi/4.0)
-        point_2 = PointWithOrientation(0.3, 0.3, 1.0, 0.0, 0.0, -math.pi/4.0)
-        point_3 = PointWithOrientation(-0.3, -0.3, 1.0, 0.0, 0.0, -math.pi/4.0)
-        point_4 = PointWithOrientation(0.0, 0.0, 1.0, 0.0, 0.0, -math.pi/4.0)
+        # point_1 = PointWithOrientation(0.0, 0.0, 1.1, 0.0, 0.0, -math.pi/4.0)
+        # point_2 = PointWithOrientation(0.3, 0.3, 1.0, 0.0, 0.0, -math.pi/4.0)
+        # point_3 = PointWithOrientation(-0.3, -0.3, 1.0, 0.0, 0.0, -math.pi/4.0)
+        # point_4 = PointWithOrientation(0.0, 0.0, 1.0, 0.0, 0.0, -math.pi/4.0)
 
-        table_corner_0 = PointWithOrientation(0.0, 0.0, 0.0, 0.0, math.pi, 0.0)
+        table_corner_0 = PointWithOrientation(0.0, 0.0, 0.05, 0.0, math.pi, -math.pi)
+        point_1 = PointWithOrientation(0.0, 0.0, 0.9, 0.0, 0.0, -math.pi/4.0)
 
-        # print("TRYING TO FIND A CUSTOM OBJECT")
-        # camera_operations = CameraOperations()
-        # is_object_detected, object_transformation_matrix = camera_operations.detect_objects_and_get_transformation(None)
-        # if is_object_detected:
-        #     print("CUSTOM OBJECT DETECTED")
-        #     # Transform the object position to the base frame
-        #     custom_object = PointWithOrientation(
-        #         object_transformation_matrix[0, 3],
-        #         object_transformation_matrix[1, 3],
-        #         object_transformation_matrix[2, 3],
-        #         0.0, 0.0, -math.pi/4.0
-        #     ) # TODO: Maybe it is worth to change PointWithOrientation to something smarter or just use transformations
-        #     print(f"X = {custom_object.x}, Y = {custom_object.y}, Z = {custom_object.z}")
-        # print("OBJECT DETECTION DONE")
+        print("TRYING TO FIND A CUSTOM OBJECT")
+        success, x, y, z = camera_operations.find_tennis()
+        if success:
+            point_2 = PointWithOrientation(x, y, z, 0.0, 0.0, -math.pi/4.0)
+
+            print(f"X = {x} | Y = {y} | Z = {z}")
+            point_above_point2 = PointWithOrientation(x, y, z - 0.1, 0.0, 0.0, -math.pi/4.0)
+        else:
+            point_2 = point_1
+        print("OBJECT DETECTION DONE")
+
+
+        transformed_p2 = panda_transformations.transform_point(point_2, 'camera', 'base')
+        #
+        # Get all marker transforms in camera frame
+        marker_transforms = camera_operations.get_marker_transforms()
+
+        # Prepare a dictionary for visualization
+        visualisation_frames = {}
+
+        # Iterate over all detected corners
+        for corner_name in ["corner_0", "corner_1", "corner_2", "corner_3"]:
+            if corner_name not in marker_transforms:
+                print(f"[WARN] {corner_name} not detected.")
+                continue
+
+            # Extract translation
+            x, y, z = marker_transforms[corner_name][:3, 3]
+
+            # Construct a point in the camera frame
+            corner_cam = PointWithOrientation(x, y, z, 0.0, 0.0, 0.0)
+
+            # Transform to base frame
+            corner_base = panda_transformations.transform_point(corner_cam, 'camera', 'base')
+
+            # Store for visualization
+            visualisation_frames[f"{corner_name}_in_camera_frame"] = corner_base.as_matrix()
+
+        # Optional: add any extra objects (e.g. a detected tennis ball)
+        visualisation_frames["tennis"] = transformed_p2.as_matrix()
+
+        # Visualise
+        panda_transformations.visusalise_environment(visualisation_frames)
 
         self.target_positions = [
-            panda_transformations.transform_point(table_corner_0, 'table', 'base')
-            # panda_transformations.transform_point(point_1, 'camera', 'base')#,
+            panda_transformations.transform_point(table_corner_0, 'table', 'base'),
+            panda_transformations.transform_point(point_1, 'camera', 'base'),
+            panda_transformations.transform_point(point_above_point2, 'camera', 'base'),
+            panda_transformations.transform_point(point_2, 'camera', 'base'),
+            panda_transformations.transform_point(point_above_point2, 'camera', 'base'),
+            panda_transformations.transform_point(point_1, 'camera', 'base')
             # panda_transformations.transform_point(point_2, 'camera', 'base'),
             # panda_transformations.transform_point(point_3, 'camera', 'base'),
             # panda_transformations.transform_point(point_4, 'camera', 'base')
@@ -269,9 +306,14 @@ class FrankaMotionController:
         # rospy.sleep(1.0)  # Give time for the scene to update
 
         rospy.loginfo("Executing predefined movements using MoveIt Trajectory Planner")
-        for pos in self.target_positions:
+        self.move_gripper(True)
+
+        for i, pos in enumerate(self.target_positions):
             print(f"Moving to position: {pos}, type: {type(pos)}")
             rospy.loginfo(f"Moving to position: {pos}")
+            if i == 4:
+                self.move_gripper(False)
+                rospy.sleep(2)
             self.move_to_pose_planner(pos)
 
         ####################################

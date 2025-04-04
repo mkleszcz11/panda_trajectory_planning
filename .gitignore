@@ -1,4 +1,11 @@
-__pychache__/
+# Ignore compiled Python files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore log files
+*.log
 
 catkin_ws/build/
 catkin_ws/devel/
