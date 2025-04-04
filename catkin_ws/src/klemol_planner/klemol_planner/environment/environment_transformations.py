@@ -31,20 +31,29 @@ class PandaTransformations:
 
         # Transformation from camera to table frame (code 0 - top right corner)
         # It is used to compute the transformation from camera to base frame
-        temp_x_value =  - self.table_corners["top_right"][1] # in axis
-        temp_y_value = self.table_corners["top_right"][0] - 0.35 # as in launchfile
-        temp_z_value = 1.5 - self.table_corners["top_right"][2] # as in launchfile
-        #TODO - this is temporary, array should be eye(4) and calibrated in application code
+        # temp_x_value =  - self.table_corners["top_right"][1] # in axis
+        # temp_y_value = self.table_corners["top_right"][0] - 0.35 # as in launchfile
+        # temp_z_value = 1.5 - self.table_corners["top_right"][2] # as in launchfile
+        temp_x_value = 0.395
+        temp_y_value = 0.177
+        temp_z_value = 1.234
         self.T_table_to_camera = np.array([
-            [-1, 0, 0, temp_x_value],
-            [0, 1, 0, temp_y_value],
+            [1, 0, 0, temp_x_value],
+            [0, -1, 0, temp_y_value],
             [0, 0, -1, temp_z_value],
             [0, 0, 0, 1]
         ])
 
         # T_base_to_camera = T_base_to_table * T_table_to_camera
         # T_table_to_camera = np.linalg.inv(self.T_camera_to_table)
-        self.T_base_to_camera = self.T_base_to_table @ self.T_table_to_camera
+        # self.T_base_to_camera = self.T_base_to_table @ self.T_table_to_camera
+
+        self.T_base_to_camera = np.array([
+            [1, 0, 0, temp_x_value],
+            [0, -1, 0, temp_y_value],
+            [0, 0, -1, temp_z_value],
+            [0, 0, 0, 1]
+        ])
 
         # Transformation from camera to object frame will be updated based on object pose
         self.T_camera_to_object = np.eye(4)
@@ -104,6 +113,8 @@ class PandaTransformations:
             T = self.T_base_to_camera
         elif source_frame == 'base' and target_frame == 'camera':
             T = np.linalg.inv(self.T_base_to_camera)
+        elif source_frame == 'table' and target_frame == 'base':
+            T = self.T_base_to_table
         else:
             print("?????????????????????????????????????")
 

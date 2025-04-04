@@ -20,7 +20,7 @@
         </geometry>
         <material>
           <script>
-            <uri>file:///home/marcin/panda_trajectory_planning/catkin_ws/src/franka_test/models/table/materials/scripts/black_table.material</uri>
+            <uri>file:///home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/franka_test/models/table/materials/scripts/black_table.material</uri>
             <name>BlackTable</name>
           </script>
         </material>
@@ -36,7 +36,7 @@
         </geometry>
         <material>
           <texture>
-            <diffuse>file:///home/marcin/panda_trajectory_planning/catkin_ws/src/franka_test/models/table/materials/textures/marker_0.jpg</diffuse>
+            <diffuse>file:///home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/franka_test/models/table/materials/textures/marker_0.jpg</diffuse>
           </texture>
           <shader type="pixel">
             <normal_map>yes</normal_map>
@@ -53,7 +53,7 @@
         </geometry>
         <material>
           <script>
-            <uri>file:///home/marcin/panda_trajectory_planning/catkin_ws/src/franka_test/models/table/materials/textures/marker_1.jpg</uri>
+            <uri>file:///home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/franka_test/models/table/materials/textures/marker_1.jpg</uri>
           </script>
         </material>
       </visual>
@@ -67,7 +67,7 @@
         </geometry>
         <material>
           <script>
-            <uri>file:///home/marcin/panda_trajectory_planning/catkin_ws/src/franka_test/models/table/materials/textures/marker_2.jpg</uri>
+            <uri>file:///home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/franka_test/models/table/materials/textures/marker_2.jpg</uri>
           </script>
         </material>
       </visual>
@@ -81,7 +81,7 @@
         </geometry>
         <material>
           <script>
-            <uri>file:///home/marcin/panda_trajectory_planning/catkin_ws/src/franka_test/models/table/materials/textures/marker_3.jpg</uri>
+            <uri>file:///home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/franka_test/models/table/materials/textures/marker_3.jpg</uri>
           </script>
         </material>
       </visual>
