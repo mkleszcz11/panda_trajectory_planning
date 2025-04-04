@@ -27,8 +27,6 @@ from klemol_planner.environment.collision_checker import CollisionChecker
 from klemol_planner.planners.rrt import RRTPlanner
 from klemol_planner.utils.config_loader import load_planner_params
 
-from scripts.object_detector import ObjectDetector
-
 import actionlib
 from franka_gripper.msg import GraspAction, GraspGoal, MoveAction, MoveGoal
 
@@ -105,22 +103,22 @@ class FrankaMotionController:
         point_3 = PointWithOrientation(-0.3, -0.3, 1.0, 0.0, 0.0, -math.pi/4.0)
         point_4 = PointWithOrientation(0.0, 0.0, 1.0, 0.0, 0.0, -math.pi/4.0)
 
-        table_corner_0 = PointWithOrientation(0.0, 0.0, 0.001, 0.0, math.pi, 0.0)
+        table_corner_0 = PointWithOrientation(0.0, 0.0, 0.0, 0.0, math.pi, 0.0)
 
-        print("TRYING TO FIND A CUSTOM OBJECT")
-        object_detector = ObjectDetector()
-        is_object_detected, object_transformation_matrix = object_detector.detect_objects_and_get_transformation(None)
-        if is_object_detected:
-            print("CUSTOM OBJECT DETECTED")
-            # Transform the object position to the base frame
-            custom_object = PointWithOrientation(
-                object_transformation_matrix[0, 3],
-                object_transformation_matrix[1, 3],
-                object_transformation_matrix[2, 3],
-                0.0, 0.0, -math.pi/4.0
-            ) # TODO: Maybe it is worth to change PointWithOrientation to something smarter or just use transformations
-            print(f"X = {custom_object.x}, Y = {custom_object.y}, Z = {custom_object.z}")
-        print("OBJECT DETECTION DONE")
+        # print("TRYING TO FIND A CUSTOM OBJECT")
+        # camera_operations = CameraOperations()
+        # is_object_detected, object_transformation_matrix = camera_operations.detect_objects_and_get_transformation(None)
+        # if is_object_detected:
+        #     print("CUSTOM OBJECT DETECTED")
+        #     # Transform the object position to the base frame
+        #     custom_object = PointWithOrientation(
+        #         object_transformation_matrix[0, 3],
+        #         object_transformation_matrix[1, 3],
+        #         object_transformation_matrix[2, 3],
+        #         0.0, 0.0, -math.pi/4.0
+        #     ) # TODO: Maybe it is worth to change PointWithOrientation to something smarter or just use transformations
+        #     print(f"X = {custom_object.x}, Y = {custom_object.y}, Z = {custom_object.z}")
+        # print("OBJECT DETECTION DONE")
 
         self.target_positions = [
             panda_transformations.transform_point(table_corner_0, 'table', 'base')

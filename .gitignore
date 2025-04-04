@@ -1,15 +1,4 @@
-# Ignore virtual environment
-env/
-venv/
-
-# Ignore compiled Python files
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Ignore log files
-*.log
+__pychache__/
 
 catkin_ws/build/
 catkin_ws/devel/

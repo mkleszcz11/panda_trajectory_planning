@@ -3,6 +3,8 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 from klemol_planner.goals.point_with_orientation import PointWithOrientation
 
+from klemol_planner.camera_utils.camera_operations import CameraOperations
+
 class PandaTransformations:
     """
     Class allowing to transform between different frames of the setup.
@@ -34,33 +36,34 @@ class PandaTransformations:
         # temp_x_value =  - self.table_corners["top_right"][1] # in axis
         # temp_y_value = self.table_corners["top_right"][0] - 0.35 # as in launchfile
         # temp_z_value = 1.5 - self.table_corners["top_right"][2] # as in launchfile
-        temp_x_value = 0.395
-        temp_y_value = 0.177
-        temp_z_value = 1.234
-        self.T_table_to_camera = np.array([
-            [1, 0, 0, temp_x_value],
-            [0, -1, 0, temp_y_value],
-            [0, 0, -1, temp_z_value],
-            [0, 0, 0, 1]
-        ])
+        # temp_x_value = 0.395
+        # temp_y_value = 0.177
+        # temp_z_value = 1.234
+        # self.T_table_to_camera = np.array([
+        #     [1, 0, 0, temp_x_value],
+        #     [0, -1, 0, temp_y_value],
+        #     [0, 0, -1, temp_z_value],
+        #     [0, 0, 0, 1]
+        # ])
+        self.T_table_to_camera = np.ones(4)
+        self.calibrate_camera()
 
         # T_base_to_camera = T_base_to_table * T_table_to_camera
         # T_table_to_camera = np.linalg.inv(self.T_camera_to_table)
-        # self.T_base_to_camera = self.T_base_to_table @ self.T_table_to_camera
+        self.T_base_to_camera = self.T_base_to_table @ self.T_table_to_camera
 
-        self.T_base_to_camera = np.array([
-            [1, 0, 0, temp_x_value],
-            [0, -1, 0, temp_y_value],
-            [0, 0, -1, temp_z_value],
-            [0, 0, 0, 1]
-        ])
+        # self.T_base_to_camera = np.array([
+        #     [1, 0, 0, temp_x_value],
+        #     [0, -1, 0, temp_y_value],
+        #     [0, 0, -1, temp_z_value],
+        #     [0, 0, 0, 1]
+        # ])
 
         # Transformation from camera to object frame will be updated based on object pose
         self.T_camera_to_object = np.eye(4)
 
     def calibrate_camera(self) -> None:
         """
-        #TODO ANDERS HERE
         Calibrate camera position based on ArUco marker positions.
 
         Assign 4x4 transformation matrix from table to camera (table frame = code 0 - top right corner)
@@ -69,14 +72,15 @@ class PandaTransformations:
         Returns:
             None
         """
-        # DO SOME MAGIC HERE
-        magic_x_value = 0.0
-        magic_y_value = 0.0
-        magic_z_value = 0.0
+        camera_op = CameraOperations()
+        try:
+            x, y, z = camera_op.get_translation_of_marker_0()
+        except Exception as e:
+            raise "CAMERA NOT CALIBRATED"
         self.T_table_to_camera = np.array([
-            [-1, 0, 0, magic_x_value],
-            [0, 1, 0, magic_y_value],
-            [0, 0, -1, magic_z_value],
+            [-1, 0, 0, x],
+            [0, 1, 0, y],
+            [0, 0, -1, z],
             [0, 0, 0, 1]
         ])
 
