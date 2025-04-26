@@ -32,6 +32,5 @@ if __name__ == "__main__":
             # Store for visualization
             visualisation_frames[f"{corner_name}_in_camera_frame"] = corner_base.as_matrix()
 
-
         # Visualise
-        panda_transformations.visusalise_environment(visualisation_frames)
+        panda_transformations.visusalise_environment(visualisation_frames, show_points_orientation=False)

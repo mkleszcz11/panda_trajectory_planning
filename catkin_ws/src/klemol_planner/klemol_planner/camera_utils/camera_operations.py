@@ -98,65 +98,6 @@ class CameraOperations:
             depth_frame = np.full(color_image.shape[:2], 1.2, dtype=np.float32)
             return color_image, depth_frame
 
-    # def find_aruco_codes_in_the_image(self) -> t.List[t.Tuple[int, np.ndarray, np.ndarray]]:
-    #     """
-    #     Detect ArUco markers and return their translation and a fixed upward-pointing rotation.
-
-    #     Returns:
-    #         List of (marker_id, tvec, rvec)
-    #     """
-    #     color_image, depth_frame = self.get_image()
-    #     corners, ids, _ = self.detector.detectMarkers(color_image)
-    #     print(f"ALL CORNERS:\n{corners}")
-    #     if ids is None:
-    #         return []
-
-    #     detected_markers = []
-
-    #     for i, corner in enumerate(corners):
-    #         marker_id = int(ids[i][0])
-
-    #         # Compute center of marker for depth lookup
-    #         cx = int(corner[0][:, 0].mean())
-    #         cy = int(corner[0][:, 1].mean())
-
-    #         cv2.putText(
-    #             color_image,
-    #             f"ID: {marker_id}",
-    #             (cx + 10, cy - 10),
-    #             cv2.FONT_HERSHEY_SIMPLEX,
-    #             0.5,
-    #             (0, 255, 0),
-    #             2,
-    #             cv2.LINE_AA
-    #         )
-
-    #         if self.USE_REALSENSE:
-    #             z_depth = depth_frame.get_distance(cx, cy)
-    #         else:
-    #             z_depth = 1.2  # fallback
-
-    #         # Compute marker center in image frame using projection matrix
-    #         uv_point = np.array([[cx], [cy], [1.0]])
-    #         camera_matrix_inv = np.linalg.inv(self.camera_matrix)
-    #         xyz_camera = camera_matrix_inv @ uv_point * z_depth
-    #         tvec = xyz_camera.flatten().reshape(3, 1)
-
-    #         # Construct a fixed "upward-pointing" rvec
-    #         # Assume marker normal is aligned with +Z in world, so rotation is identity
-    #         # rvec = [0, 0, 0] (no rotation)
-    #         rvec = np.zeros((3, 1), dtype=np.float32)
-
-    #         # Visualization
-    #         cv2.drawFrameAxes(color_image, self.camera_matrix, self.dist_coeffs, rvec, tvec, 0.23)
-    #         cv2.putText(color_image, f"ID: {marker_id}", (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-
-    #         detected_markers.append((marker_id, tvec.flatten(), rvec.flatten()))
-
-    #     cv2.imshow("ArUco Detection", cv2.resize(color_image, (1280, 720)))
-    #     cv2.waitKey(0)
-
-    #     return detected_markers
 
     def find_aruco_codes_in_the_image(self) -> t.List[t.Tuple[int, np.ndarray, np.ndarray]]:
         """
@@ -167,7 +108,6 @@ class CameraOperations:
         """
         color_image, depth_frame = self.get_image()
         corners, ids, _ = self.detector.detectMarkers(color_image)
-        print(f"ALL CORNERS:\n{corners}")
         if ids is None:
             return []
 
@@ -208,6 +148,11 @@ class CameraOperations:
             # Visualization
             cv2.drawFrameAxes(color_image, self.camera_matrix, self.dist_coeffs, rvec, tvec, 0.23)
             cv2.putText(color_image, f"ID: {marker_id}", (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+        # Put green dot at the center of the image
+        width = color_image.shape[1]
+        height = color_image.shape[0]
+        cv2.circle(color_image, (width//2, height//2), 5, (0, 255, 0), -1)
 
         # cv2.imshow("ArUco Detection", color_image)
         # Show it in scale
@@ -253,12 +198,6 @@ class CameraOperations:
         rotation_matrix, _ = cv2.Rodrigues(rvec)
         yaw = np.arctan2(rotation_matrix[1, 0], rotation_matrix[0, 0])
 
-        print("[DEBUG] solvePnP result:")
-        print(f"  Image Points (px):\n{img_points}")
-        print(f"  Estimated tvec (camera → marker): {tvec.ravel()}  [x, y, z] (m)")
-        print(f"  Estimated rvec: {rvec.ravel()}")
-        print(f"  Estimated yaw (Z rotation): {np.degrees(yaw):.2f}°\n")
-
         return rvec, tvec
 
     def get_marker_transforms(self) -> t.Dict[str, np.ndarray]:
@@ -281,35 +220,6 @@ class CameraOperations:
             T[:3, 3] = np.asarray(tvec).flatten()
 
             transforms[f"corner_{marker_id}"] = T
-        # for marker_id, tvec, rvec in markers:
-        #     # Only rotation in Z axis
-        #     yaw = rvec[2]
-        #     cos_yaw = np.cos(yaw)
-        #     sin_yaw = np.sin(yaw)
-        #     R_z = np.array([
-        #         [cos_yaw, -sin_yaw, 0],
-        #         [sin_yaw,  cos_yaw, 0],
-        #         [0, 0, 1]
-        #     ])
-
-        #     # Flip and rotate to match world alignment
-        #     R_flip_x = np.array([
-        #         [1, 0, 0],
-        #         [0, -1, 0],
-        #         [0, 0, -1]
-        #     ])
-        #     R_rot_z_270 = np.array([
-        #         [0, 1, 0],
-        #         [-1, 0, 0],
-        #         [0, 0, 1]
-        #     ])
-        #     R_final = R_flip_x @ R_z
-
-        #     T = np.eye(4)
-        #     T[:3, :3] = R_final
-        #     T[:3, 3] = tvec
-
-        #     transforms[f"corner_{marker_id}"] = T
 
         # Sort by marker ID before returning
         transforms = dict(sorted(transforms.items(), key=lambda item: int(item[0].split("_")[1])))
@@ -525,7 +435,6 @@ class CameraOperations:
             result = self.convert_depth_to_phys_coord_using_realsense(u_rescaled, v_rescaled, depth_value, self.camera_matrix,
                                                                         self.dist_coeffs, width, height)
             print(f"Real-world coordinates of ball center (meters): {result}")
-            print(f"KEKEKEKEKEKEK returning {result}, type {type(result)}")
             return True, result[0], result[1], result[2]
         else:
             print("No circles detected.")

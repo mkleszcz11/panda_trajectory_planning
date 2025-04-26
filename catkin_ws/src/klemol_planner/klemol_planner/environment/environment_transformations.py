@@ -13,20 +13,20 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.patches as mpatches
 
 class PandaTransformations:
-    def __init__(self, cam_operations):
+    def __init__(self, cam_operations: CameraOperations) -> None:
         # Table corners in base frame
         # Found with command:
         # rosrun tf tf_echo /panda_link0 /panda_link8
         self.camera_operations = cam_operations
 
         # This is the height from flange (last coordinate system) to the table while we are calibrating
-        self.z_calibration_constant = 0.12
+        self.z_calibration_constant = 0.0#0.12
 
         self.table_corners_translations = {
-            "corner_0": np.array([0.687, -0.385, 0.177 - self.z_calibration_constant]),
-            "corner_1": np.array([0.674,  0.366, 0.183 - self.z_calibration_constant]),
-            "corner_2": np.array([0.100,  0.412, 0.195 - self.z_calibration_constant]),
-            "corner_3": np.array([0.099, -0.412, 0.196 - self.z_calibration_constant])
+            "corner_0": np.array([0.687, -0.385, 0.177]),# - self.z_calibration_constant]),
+            "corner_1": np.array([0.674,  0.366, 0.183]),# - self.z_calibration_constant]),
+            "corner_2": np.array([0.100,  0.412, 0.195]),# - self.z_calibration_constant]),
+            "corner_3": np.array([0.099, -0.412, 0.196])# - self.z_calibration_constant])
         }
         # Table corners, rpy in radians:
         # We are not using quaternions as it is easy to rotate only in z axis for rpy
@@ -36,7 +36,6 @@ class PandaTransformations:
             "corner_2": [0.0, 0.0, -0.791 + math.pi * 0.75],
             "corner_3": [0.0, 0.0, -0.761 + math.pi * 0.75]
         }
-
 
         # Compute transformation matrices for each corner
         self.T_base_to_corners_dict = {}
@@ -55,36 +54,6 @@ class PandaTransformations:
                 formatter={'float_kind': lambda x: f"{x:.2f}"}
             )
             print(f"base to corner {btc} =\n{formatted}")
-
-        # self.T_table_corners_to_camera_dict ={
-        #     "corner_0": np.ones(4),
-        #     "corner_1": np.ones(4),
-        #     "corner_2": np.ones(4),
-        #     "corner_3": np.ones(4)}
-
-        # self.calibrate_camera_translation()
-        # self.calibrate_camera_rotation()
-
-        # print(f"-----------------------------------------")
-        # # Print all corner to camera dict 
-        # for btc in self.T_table_corners_to_camera_dict:
-        #     formatted = np.array2string(
-        #         self.T_table_corners_to_camera_dict[btc],
-        #         formatter={'float_kind': lambda x: f"{x:.2f}"}
-        #     )
-        #     print(f"corner {btc} to camera =\n{formatted}")
-        # print(f"-----------------------------------------")
-
-
-        # # T_base_to_camera_dict = T_base_to_corners_dict * T_table_corners_to_camera_dict
-        # # T_table_corners_to_camera_dict = np.linalg.inv(self.T_camera_to_table)
-        # self.T_base_to_camera_dict = {
-        #     "corner_0" : self.T_base_to_corners_dict["corner_0"] @ self.T_table_corners_to_camera_dict["corner_0"],
-        #     "corner_1" : self.T_base_to_corners_dict["corner_1"] @ self.T_table_corners_to_camera_dict["corner_1"],
-        #     "corner_2" : self.T_base_to_corners_dict["corner_2"] @ self.T_table_corners_to_camera_dict["corner_2"],
-        #     "corner_3" : self.T_base_to_corners_dict["corner_3"] @ self.T_table_corners_to_camera_dict["corner_3"]}
-
-        # self.T_base_to_camera = self.get_average_transform_to_camera()
 
         # Initialize storage for camera transformations per corner
         self.T_table_corners_to_camera_dict = {}
@@ -105,27 +74,64 @@ class PandaTransformations:
 
     def calibrate_camera(self) -> None:
         """
-        Estimate base to camera transformation using ArUco markers.
-        Visualize the process step-by-step:
-        1. Before centering
-        2. After centering
-        3. After rotation
+        Calibrate the camera by finding its position and orientation relative to the base.
+
+        Solve everything in 2D. In last steps Z dimension is added and self.T_base_to_camera is defined.
+
+        NOTE: If you are some lucky student in NRT lab working with this code, you might be wondering,
+        isn't there a better way to do this? Probably there is, but be prepared to spend substantial
+        amount of time and get the same result.
+
+        Steps:
+        1. Get the (x, y) positions of all corners relative to the base frame.
+        2. Get the (x, y) positions of all corners relative to the camera frame.
+        (Note: Camera sees a mirror image because its z-axis points downward - make a mirror along X axis)
+        - Keep corners ordered counterclockwise.
+        - Camera frame must match base frame orientation: y points up (C1C2 edge), x points right (C0C1 edge).
+        - After calibration, as the last step, we will flip the camera transformation along the X-axis again.
+
+        [VISUALIZE] Show corners separately for base and camera. Mark centroids and (0,0) axes (y-up, x-right).
+
+        3. Calculate the centroid (mean) of base_corners_xy → mean_in_base_frame.
+        4. Calculate the centroid (mean) of camera_corners_xy → mean_in_camera_frame.
+
+        [VISUALIZE] Treat both centroids as (0, 0). Plot both sets of points on the same plot to verify alignment.
+
+        5. Use the Kabsch algorithm to find the rotation angle (camera_to_base_rotation) between the two sets.
+
+        6. Translate camera_corners_xy and the camera frame by:
+        camera_translation = mean_in_base_frame - mean_in_camera_frame.
+        (Check: After translation, the centroids must overlap exactly.)
+
+        [VISUALIZE] Show both point sets on one plot. Show origins and centroids (they should overlap).
+
+        7. Rotate the translated camera_corners_xy and camera origin using camera_to_base_rotation.
+
+        [VISUALIZE] Show updated points and frames after rotation.
+
+        8. Calculate cam_z:
+        For each corner, add its distance from the camera (camera z) to its z in the base frame.
+        Take the average of all results to get cam_z.
+
+        9. Build T_base_to_camera_before_flip.
+            Apply an X-axis flip using X_flip_matrix.
+
+        10. Save the final transformation as self.T_base_to_camera.
         """
         print("[INFO] Calibrating camera...")
         camera_op = self.camera_operations
         detected_markers = camera_op.get_marker_transforms()
 
-        print(f"[INFO] I GOT MARKERS: {detected_markers}")
-
         if len(detected_markers) < 4:
             raise RuntimeError("Not all 4 corners were detected")
 
-        base_xy = []
-        cam_xy = []
+        base_corners_xy = []
+        camera_corners_xy = []
         cam_zs = []
 
-        # # Variable to store camera yaw rotation (related to base frame).
-        # camera_rotation = 0.0
+        base_xy = np.array([[0.0], [0.0]])
+        camera_xy = np.array([[0.0], [0.0]])
+        camera_rotation = np.array([[1.0, 0.0], [0.0, 1.0]]) # Identity matrix
 
         for corner_name, T_cam_marker in detected_markers.items():
             if corner_name not in self.table_corners_translations:
@@ -133,223 +139,241 @@ class PandaTransformations:
             p_cam = T_cam_marker[:3, 3]
             p_base = self.table_corners_translations[corner_name]
 
-            cam_xy.append(p_cam[:2])
-            base_xy.append(p_base[:2])
+            camera_corners_xy.append(p_cam[:2])
+            base_corners_xy.append(p_base[:2])
             cam_zs.append(p_cam[2] + p_base[2])
 
-        # Z Axis for camera points the other way as for base
-        # # MAKE A "MIRROR VIEW" along the Z axis for x and y
-        cam_xy = np.array(cam_xy) * np.array([1, -1])
+        base_corners_xy = np.array(base_corners_xy).T  # shape (2, N) -> np.array([[x1, x2, x3, x4], [y1, y2, y3, y4]])
+        camera_corners_xy = np.array(camera_corners_xy).T
 
-        base_xy = np.array(base_xy).T  # shape (2, N) -> np.array([[x1, x2, x3, x4], [y1, y2, y3, y4]])
-        cam_xy = np.array(cam_xy).T
+        # Flip X-axis only
+        camera_corners_xy[0, :] *= -1
 
-        base_mean = np.mean(base_xy, axis=1, keepdims=True)
-        cam_mean = np.mean(cam_xy, axis=1, keepdims=True)
+        # Compute centroids
+        base_centroid = np.mean(base_corners_xy, axis=1, keepdims=True)
+        camera_centroid = np.mean(camera_corners_xy, axis=1, keepdims=True)
 
-        base_centered = base_xy - base_mean
-        cam_centered = cam_xy - cam_mean
+        # VISUALIZE STEP 1
+        self.__visualize_corners(base_corners_xy=base_corners_xy,
+                                 camera_corners_xy=camera_corners_xy,
+                                 base_centroid=base_centroid,
+                                 camera_centroid=camera_centroid,
+                                 base_origin=base_xy,
+                                 camera_origin=camera_xy,
+                                 rotation=camera_rotation,
+                                 mode='separate',
+                                 plot_title="Step 1: Before Centering")
 
-        ###############################
-        ####### START PLOTTING #######
-        ###############################
-        # PLOT CORNERS RELATED TO BASE & CAMERA BEFORE CENTERING
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
-        fig.suptitle("Step 1: Before Centering (Separate Frames)")
+        # Center the point clouds
+        base_corners_xy_centered = base_corners_xy - base_centroid
+        camera_corners_xy_centered = camera_corners_xy - camera_centroid
 
-        # BASE FRAME PLOT
-        ax1.set_title("Base Frame")
-        ax1.scatter(base_xy[0], base_xy[1], c='black', label='Base Corners')
-        for i in range(base_xy.shape[1]):
-            ax1.text(base_xy[0, i], base_xy[1, i], f"B{i}", color='black')
+        base_centroid_after_centering = np.mean(base_corners_xy_centered, axis=1, keepdims=True)
+        camera_centroid_after_centering = np.mean(camera_corners_xy_centered, axis=1, keepdims=True)
 
-        # Draw base axes (origin at 0,0)
-        ax1.quiver(0, 0, 0.1, 0, color='red', angles='xy', scale_units='xy', scale=1, label='Base X')
-        ax1.quiver(0, 0, 0, 0.1, color='green', angles='xy', scale_units='xy', scale=1, label='Base Y')
+        base_xy_after_centering = base_xy - base_centroid
+        camera_xy_after_centering = camera_xy - camera_centroid
+        print(f"BASE XY AFTER CENTERING: {base_xy_after_centering}")
+        print(f"CAMERA XY AFTER CENTERING: {camera_xy_after_centering}")
 
-        ax1.set_aspect('equal')
-        ax1.grid(True)
-        ax1.legend()
-        ax1.set_xlabel("X [m]")
-        ax1.set_ylabel("Y [m]")
+        # VISUALIZE STEP 2
+        self.__visualize_corners(
+            base_corners_xy=base_corners_xy_centered,
+            camera_corners_xy=camera_corners_xy_centered,
+            base_centroid=base_centroid_after_centering,
+            camera_centroid=camera_centroid_after_centering,
+            base_origin=base_xy_after_centering,
+            camera_origin=camera_xy_after_centering,
+            rotation=camera_rotation,
+            mode='combined',
+            plot_title="Step 2: After Centering"
+        )
 
-        # CAMERA FRAME PLOT
-        ax2.set_title("Camera Frame")
-        ax2.scatter(cam_xy[0], cam_xy[1], c='orange', label='Camera Corners')
-        for i in range(cam_xy.shape[1]):
-            ax2.text(cam_xy[0, i], cam_xy[1, i], f"C{i}", color='orange')
+        # STEP 3: Find optimal rotation using Kabsch algorithm
 
-        # Draw camera axes (origin at 0,0)
-        ax2.quiver(0, 0, 0.1, 0, color='red', angles='xy', scale_units='xy', scale=1, label='Cam X')
-        ax2.quiver(0, 0, 0, -0.1, color='green', angles='xy', scale_units='xy', scale=1, label='Cam Y')
+        H = camera_corners_xy_centered @ base_corners_xy_centered.T  # (2xN) @ (Nx2).T → (2x2)
 
-        ax2.set_aspect('equal')
-        ax2.grid(True)
-        ax2.legend()
-        ax2.set_xlabel("X [m]")
-        ax2.set_ylabel("Y [m]")
-
-        plt.tight_layout()
-        # plt.show()
-        ###############################
-        ####### FINISH PLOTTING #######
-        ###############################
-
-
-        ##############################
-        ####### START PLOTTING #######
-        ##############################
-        # PLOT TWO PREVIOUS PLOTS ON TOP OF EACH OTHER (BEFORE ROTATION)
-        fig, ax = plt.subplots(figsize=(6, 6))
-        ax.set_title("Step 2: Base vs Camera Corners (Before Alignment)")
-
-        # Plot base corners
-        ax.scatter(base_xy[0], base_xy[1], c='black', label='Base Corners')
-        for i in range(base_xy.shape[1]):
-            ax.text(base_xy[0, i], base_xy[1, i], f"B{i}", color='black')
-
-        # Plot camera corners (after Y-flip)
-        ax.scatter(cam_xy[0], cam_xy[1], c='orange', label='Camera Corners')
-        for i in range(cam_xy.shape[1]):
-            ax.text(cam_xy[0, i], cam_xy[1, i], f"C{i}", color='orange')
-
-        # Draw base frame at (0,0)
-        ax.quiver(0, 0, 0.1, 0, color='red', angles='xy', scale_units='xy', scale=1, label='Base X')
-        ax.quiver(0, 0, 0, 0.1, color='green', angles='xy', scale_units='xy', scale=1, label='Base Y')
-
-        # Camera frame at camera origin (0,0)
-        ax.quiver(0, 0, 0.1, 0, color='blue', linestyle='dashed', scale_units='xy', scale=1, label='Cam X')
-        ax.quiver(0, 0, 0, -0.1, color='cyan', linestyle='dashed', scale_units='xy', scale=1, label='Cam Y')
-
-        ax.set_aspect('equal')
-        ax.grid(True)
-        ax.legend()
-        ax.set_xlabel("X [m]")
-        ax.set_ylabel("Y [m]")
-        plt.tight_layout()
-        # plt.show()
-        ###############################
-        ####### FINISH PLOTTING #######
-        ###############################
-
-        # Apply rotation (Kabsch)
-        H = cam_centered @ base_centered.T
         U, _, Vt = np.linalg.svd(H)
         R_2D = Vt.T @ U.T
+
+        # Ensure a right-handed coordinate system
         if np.linalg.det(R_2D) < 0:
             Vt[1, :] *= -1
             R_2D = Vt.T @ U.T
+        # Apply rotation
+        camera_corners_xy_rotated = R_2D @ camera_corners_xy_centered
+        camera_xy_rotated = R_2D @ camera_xy_after_centering
 
-        ##############################
-        ####### START PLOTTING #######
-        ##############################
-        # PLOT EVERYTHING AFTER ROTATION
+        # VISUALIZE STEP 3
+        self.__visualize_corners(
+            base_corners_xy=base_corners_xy_centered,
+            camera_corners_xy=camera_corners_xy_rotated,
+            base_centroid=base_centroid_after_centering,
+            camera_centroid=camera_centroid_after_centering,
+            base_origin=base_xy_after_centering,
+            camera_origin=camera_xy_rotated,
+            rotation=camera_rotation,
+            mode='combined',
+            plot_title="Step 3: After Rotation"
+        )
 
-        # Apply rotation to camera points
-        cam_rotated = R_2D @ cam_centered
+        # STEP 4: Calculate camera Z and flip entire transformation
+        # Estimate Z
+        x_translation = camera_xy_rotated[0, 0] - base_xy_after_centering[0, 0]
+        y_translation = camera_xy_rotated[1, 0] - base_xy_after_centering[1, 0]
+        z_translation = np.mean(cam_zs)
 
-        # Re-shift camera points to base frame
-        cam_aligned = cam_rotated + base_mean
+        print(f"X translation: {x_translation:.4f} m")
+        print(f"Y translation: {y_translation:.4f} m")
+        print(f"Z translation: {z_translation:.4f} m")
 
-        # Plot base vs rotated camera
-        fig, ax = plt.subplots(figsize=(6, 6))
-        ax.set_title("Step 3: After Kabsch Rotation (Aligned)")
+        print(f"camera_xy_rotated: {camera_xy_rotated}")
 
-        # Base
-        ax.scatter(base_xy[0], base_xy[1], c='black', label='Base Corners')
-        for i in range(base_xy.shape[1]):
-            ax.text(base_xy[0, i], base_xy[1, i], f"B{i}", color='black')
-
-        # Rotated & aligned camera corners
-        ax.scatter(cam_aligned[0], cam_aligned[1], c='orange', label='Rotated Camera Corners')
-        for i in range(cam_aligned.shape[1]):
-            ax.text(cam_aligned[0, i], cam_aligned[1, i], f"C{i}", color='orange')
-
-        # Base frame (origin at 0,0)
-        ax.quiver(0, 0, 0.1, 0, color='red', angles='xy', scale_units='xy', scale=1, label='Base X')
-        ax.quiver(0, 0, 0, 0.1, color='green', angles='xy', scale_units='xy', scale=1, label='Base Y')
-
-        # Camera frame (estimated position = base_mean, estimated orientation = R_2D)
-        cam_frame_origin = base_mean.flatten()
-        cam_axes = R_2D @ np.eye(2) * 0.1
-        ax.quiver(*cam_frame_origin, cam_axes[0, 0], cam_axes[1, 0], color='blue', label='Cam X')
-        ax.quiver(*cam_frame_origin, cam_axes[0, 1], cam_axes[1, 1], color='cyan', label='Cam Y')
-
-        ax.set_aspect('equal')
-        ax.grid(True)
-        ax.legend()
-        ax.set_xlabel("X [m]")
-        ax.set_ylabel("Y [m]")
-        plt.tight_layout()
-        # plt.show()
-
-        # Final transformation
-        yaw = np.arctan2(R_2D[1, 0], R_2D[0, 0])
-        z_camera = np.mean(cam_zs)
-
+        # 5. Build T_base_to_camera_before_flip
         T_base_to_camera_before_flip = np.array([
-            [np.cos(yaw), -np.sin(yaw), 0, cam_frame_origin[0]],
-            [np.sin(yaw),  np.cos(yaw), 0, cam_frame_origin[1]],
-            [0,           0,            1, z_camera],
-            [0,           0,            0, 1]
-        ])
-        X_flip_matrix = np.array([
-            [1,  0,  0, 0],
-            [0, -1,  0, 0],
-            [0,  0, -1, 0],
-            [0,  0,  0, 1]
+            [R_2D[0, 0], R_2D[0, 1], 0, x_translation],
+            [R_2D[1, 0], R_2D[1, 1], 0, y_translation],
+            [0, 0, 1, z_translation],
+            [0, 0, 0, 1]
         ])
 
-        self.T_base_to_camera = T_base_to_camera_before_flip @ X_flip_matrix
+        print(f"[INFO] T_base_to_camera_before_flip:\n{np.round(T_base_to_camera_before_flip, 4)}")
 
-        print(f"[INFO] T_base_to_camera estimated from corners:\n{np.round(self.T_base_to_camera, 4)}")
+        # Apply X-axis flip correction
+        X_flip = np.array([[1,  0,  0, 0],
+                           [0, -1,  0, 0],
+                           [0,  0, -1, 0],
+                           [0,  0,  0, 1]])
+
+        # For whatever reason we also have to flip around new Z axis
+        Z_flip = np.array([[-1,  0, 0, 0],
+                           [ 0, -1, 0, 0],
+                           [ 0,  0, 1, 0],
+                           [ 0,  0, 0, 1]])
+
+        self.T_base_to_camera = T_base_to_camera_before_flip @ X_flip @ Z_flip
+
+        print(f"[INFO] Final T_base_to_camera (after X flip):\n{np.round(self.T_base_to_camera, 4)}")
 
 
+    def __visualize_corners(self, base_corners_xy: np.ndarray, camera_corners_xy: np.ndarray,
+                            base_centroid: np.ndarray, camera_centroid: np.ndarray,
+                            base_origin: np.ndarray = np.array([[0], [0]]),
+                            camera_origin: np.ndarray = np.array([[0], [0]]),
+                            rotation: np.ndarray = None,
+                            mode: str = 'separate',
+                            plot_title: str = "Camera Calibration") -> None:
+        """
+        Helper to visualize the environment.
 
-    # def calibrate_camera_v2(self) -> None:
-    #     """
-    #     Calibrate camera using ArUco markers (each at a table corner).
-    #     """
-    #     camera_op = CameraOperations()
-    #     try:
-    #         markers = camera_op.find_aruco_codes_in_the_image()
-    #     except Exception:
-    #         raise RuntimeError("CAMERA NOT CALIBRATED")
+        Args:
+            base_corners_xy: (2, N) true base corners
+            camera_corners_xy: (2, N) detected camera corners (already flipped X)
+            base_centroid: (2,1)
+            camera_centroid: (2,1)
+            base_origin: (2,1) base frame origin position
+            camera_origin: (2,1) camera frame origin position
+            rotation: (2,2) rotation matrix (optional)
+            mode: 'separate' or 'combined'
+        """
+        fig = plt.figure(figsize=(8, 6))
+        if mode == 'separate':
+            ax1 = fig.add_subplot(121)
+            ax2 = fig.add_subplot(122)
+            # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+            fig.suptitle(plot_title)
 
-    #     self.T_table_corners_to_camera_dict = {}
+            # --- Base Frame ---
+            ax1.set_title("Base Frame")
+            ax1.scatter(base_corners_xy[0], base_corners_xy[1], c='blue', label='Base Corners')
+            ax1.scatter(*base_centroid, c='black', marker='x', label='Base Centroid')
 
-    #     for marker_id, tvec, rvec in markers:
-    #         yaw = rvec[2]  # Only Z rotation
+            for i in range(base_corners_xy.shape[1]):
+                ax1.text(base_corners_xy[0, i], base_corners_xy[1, i], f"B{i}", color='blue')
 
-    #         R_z = np.array([
-    #             [np.cos(yaw), -np.sin(yaw), 0],
-    #             [np.sin(yaw),  np.cos(yaw), 0],
-    #             [0,            0,           1]
-    #         ])
+            # Draw base axes at base_origin
+            ax1.quiver(*base_origin.flatten(), 0.1, 0, color='red', angles='xy', scale_units='xy', scale=1, label='Base X')
+            ax1.quiver(*base_origin.flatten(), 0, 0.1, color='green', angles='xy', scale_units='xy', scale=1, label='Base Y')
 
-    #         # Flip 180° about X to align Z down, then rotate 270° clockwise around Z
-    #         R_flip = np.array([[1, 0, 0],
-    #                            [0, -1, 0],
-    #                            [0, 0, -1]])
+            ax1.set_aspect('equal')
+            ax1.grid(True)
+            ax1.legend()
+            ax1.set_xlabel("X [m]")
+            ax1.set_ylabel("Y [m]")
 
-    #         R_rot_z_270 = np.array([[0, 1, 0],
-    #                                 [-1, 0, 0],
-    #                                 [0, 0, 1]])
+            # --- Camera Frame ---
+            ax2.set_title("Camera Frame")
+            cam = camera_corners_xy.copy()
 
-    #         R_final = R_rot_z_270 @ R_flip @ R_z
+            if rotation is not None:
+                cam = rotation @ cam
 
-    #         T = np.eye(4)
-    #         T[:3, :3] = R_final
-    #         T[:3, 3] = np.asarray(tvec).reshape(3,)
+            ax2.scatter(cam[0], cam[1], c='orange', label='Camera Corners')
+            ax2.scatter(*camera_centroid, c='black', marker='x', label='Camera Centroid')
 
-    #         self.T_table_corners_to_camera_dict[f"corner_{marker_id}"] = T
+            for i in range(cam.shape[1]):
+                ax2.text(cam[0, i], cam[1, i], f"C{i}", color='orange')
 
-    #     # Compute full base → camera transform for each corner
-    #     self.T_base_to_camera_dict = {
-    #         corner: self.T_base_to_corners_dict[corner] @ self.T_table_corners_to_camera_dict[corner]
-    #         for corner in self.T_table_corners_to_camera_dict
-    #         if corner in self.T_base_to_corners_dict
-    #     }
+            # Draw camera axes at camera_origin, rotated
+            if rotation is not None:
+                camera_x_axis = rotation @ np.array([0.1, 0]).reshape(2, 1)
+                camera_y_axis = rotation @ np.array([0, 0.1]).reshape(2, 1)
+            else:
+                camera_x_axis = np.array([[0.1], [0]])
+                camera_y_axis = np.array([[0], [0.1]])
+
+            ax2.quiver(*camera_origin.flatten(), camera_x_axis[0, 0], camera_x_axis[1, 0], color='r', angles='xy', scale_units='xy', scale=1, label='Cam X')
+            ax2.quiver(*camera_origin.flatten(), camera_y_axis[0, 0], camera_y_axis[1, 0], color='g', angles='xy', scale_units='xy', scale=1, label='Cam Y')
+
+            ax2.set_aspect('equal')
+            ax2.grid(True)
+            ax2.legend()
+            ax2.set_xlabel("X [m]")
+            ax2.set_ylabel("Y [m]")
+
+            plt.tight_layout()
+
+        elif mode == 'combined':
+            ax = fig.add_subplot(111)
+            fig.suptitle(plot_title)
+
+            ax.scatter(base_corners_xy[0], base_corners_xy[1], c='blue', label='Base Corners')
+            ax.scatter(*base_centroid, c='blue', marker='x', label='Base Centroid', s=50)
+
+            cam = camera_corners_xy.copy()
+            if rotation is not None:
+                cam = rotation @ cam
+
+            ax.scatter(cam[0], cam[1], c='orange', label='Camera Corners')
+            ax.scatter(*camera_centroid, c='none', edgecolors='orange', marker='o', label='Camera Centroid', s=50, linewidths=2)
+
+            for i in range(base_corners_xy.shape[1]):
+                ax.text(base_corners_xy[0, i], base_corners_xy[1, i], f"B{i}", color='blue')
+
+            for i in range(cam.shape[1]):
+                ax.text(cam[0, i], cam[1, i], f"C{i}", color='orange')
+
+            # Draw base axes
+            ax.quiver(*base_origin.flatten(), 0.1, 0, color='red', label='Base X')
+            ax.quiver(*base_origin.flatten(), 0, 0.1, color='green', label='Base Y')
+
+            # Draw camera axes rotated
+            if rotation is not None:
+                camera_x_axis = rotation @ np.array([0.1, 0]).reshape(2, 1)
+                camera_y_axis = rotation @ np.array([0, 0.1]).reshape(2, 1)
+            else:
+                camera_x_axis = np.array([[0.1], [0]])
+                camera_y_axis = np.array([[0], [0.1]])
+
+            ax.quiver(*camera_origin.flatten(), camera_x_axis[0, 0], camera_x_axis[1, 0], color='r', linestyle='dashed', label='Cam X')
+            ax.quiver(*camera_origin.flatten(), camera_y_axis[0, 0], camera_y_axis[1, 0], color='g', linestyle='dashed', label='Cam Y')
+
+            ax.set_aspect('equal')
+            ax.grid(True)
+            ax.legend()
+            ax.set_xlabel("X [m]")
+            ax.set_ylabel("Y [m]")
+            plt.tight_layout()
 
     def get_average_transform_to_camera(self) -> np.ndarray:
         """
@@ -455,7 +479,7 @@ class PandaTransformations:
             new_orientation[0], new_orientation[1], new_orientation[2]
         )
 
-    def visusalise_environment(self, T_additional_to_visualise_dict: dict = None):
+    def visusalise_environment(self, T_additional_to_visualise_dict: dict = None, show_points_orientation: bool = True) -> None:
         """
         Visualize the environment with:
         - Table corners (base frame)
@@ -481,7 +505,8 @@ class PandaTransformations:
             # Plot small axes to indicate orientation
             for i, color in zip(range(3), ['r', 'g', 'b']):
                 end = T_corner[:3, 3] + 0.15 * T_corner[:3, i]
-                ax.plot([x, end[0]], [y, end[1]], [z, end[2]], color=color)
+                if show_points_orientation:
+                    ax.plot([x, end[0]], [y, end[1]], [z, end[2]], color=color)
 
         # Plot table corners
         for name, T_corner in self.T_base_to_corners_dict.items():
@@ -492,7 +517,8 @@ class PandaTransformations:
             # Plot small axes to indicate orientation
             for i, color in zip(range(3), ['r', 'g', 'b']):
                 end = T_corner[:3, 3] + 0.15 * T_corner[:3, i]
-                ax.plot([x, end[0]], [y, end[1]], [z, end[2]], color=color)
+                if show_points_orientation:
+                    ax.plot([x, end[0]], [y, end[1]], [z, end[2]], color=color)
 
         # Plot estimated camera pose
         T_cam = self.T_base_to_camera
