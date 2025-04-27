@@ -1,7 +1,7 @@
 rrt:
   step_size: 0.1        # step between nodes TODO -> WHAT IS THE UNIT (rad)
-  bias: 0.5  # Probability of sampling the goal (for biasing)
-  max_iterations: 25000
+  bias: 0.7  # Probability of sampling the goal (for biasing)
+  max_iterations: 20000
   max_time: 25.0 # max time to run the planner (s)
 
 rrt_star:

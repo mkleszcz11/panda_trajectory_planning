@@ -148,22 +148,22 @@ class FrankaMotionController:
         rospy.loginfo("Returning to Start Joint Configuration before trajectory planner execution")
         self.move_to_joint_config(self.start_joint_config)
 
-        rospy.loginfo("Executing predefined movements using a Trajectory Planner")
+        # rospy.loginfo("Executing predefined movements using a Trajectory Planner")
 
-        # Transform the list of PointWithOrientation objects to a list of lists
-        # list_of_poses = [pos.get_position_and_orientation_as_list() for pos in self.target_positions]
-        # print(f"List of poses: {list_of_poses}")
-        for pos in self.target_positions:
-            print(f"Moving to position: {pos}, type: {type(pos)}")
-            # pos = pos.get_position_and_orientation_as_list()
-            self.move_to_pose_planner(pos)
+        # # Transform the list of PointWithOrientation objects to a list of lists
+        # # list_of_poses = [pos.get_position_and_orientation_as_list() for pos in self.target_positions]
+        # # print(f"List of poses: {list_of_poses}")
+        # for pos in self.target_positions:
+        #     print(f"Moving to position: {pos}, type: {type(pos)}")
+        #     # pos = pos.get_position_and_orientation_as_list()
+        #     self.move_to_pose_planner(pos)
 
-        rospy.loginfo("Returning to Start Joint Configuration after execution")
-        self.move_to_joint_config(self.start_joint_config)
+        # rospy.loginfo("Returning to Start Joint Configuration after execution")
+        # self.move_to_joint_config(self.start_joint_config)
 
-        # Save data for comparison
-        self.save_data()
-        rospy.loginfo("Execution complete.")
+        # # Save data for comparison
+        # self.save_data()
+        # rospy.loginfo("Execution complete.")
 
 if __name__ == "__main__":
     controller = FrankaMotionController()
