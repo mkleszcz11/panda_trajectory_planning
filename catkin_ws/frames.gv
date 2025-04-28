@@ -1,0 +1,31 @@
+digraph G {
+"world" -> "panda_link0"[label="Broadcaster: /robot_state_publisher\nAverage rate: 10000.000 Hz\nMost recent transform: 0.000 ( 2106.307 sec old)\nBuffer length: 0.000 sec\n"];
+"panda_link8" -> "panda_hand"[label="Broadcaster: /robot_state_publisher\nAverage rate: 10000.000 Hz\nMost recent transform: 0.000 ( 2106.307 sec old)\nBuffer length: 0.000 sec\n"];
+"panda_link7" -> "panda_link8"[label="Broadcaster: /robot_state_publisher\nAverage rate: 10000.000 Hz\nMost recent transform: 0.000 ( 2106.307 sec old)\nBuffer length: 0.000 sec\n"];
+"panda_hand" -> "panda_hand_sc"[label="Broadcaster: /robot_state_publisher\nAverage rate: 10000.000 Hz\nMost recent transform: 0.000 ( 2106.307 sec old)\nBuffer length: 0.000 sec\n"];
+"panda_hand" -> "panda_hand_tcp"[label="Broadcaster: /robot_state_publisher\nAverage rate: 10000.000 Hz\nMost recent transform: 0.000 ( 2106.307 sec old)\nBuffer length: 0.000 sec\n"];
+"panda_link6" -> "panda_link7"[label="Broadcaster: /robot_state_publisher\nAverage rate: 30.223 Hz\nMost recent transform: 2106.300 ( 0.007 sec old)\nBuffer length: 4.566 sec\n"];
+"panda_link0" -> "panda_link0_sc"[label="Broadcaster: /robot_state_publisher\nAverage rate: 10000.000 Hz\nMost recent transform: 0.000 ( 2106.307 sec old)\nBuffer length: 0.000 sec\n"];
+"panda_link1" -> "panda_link1_sc"[label="Broadcaster: /robot_state_publisher\nAverage rate: 10000.000 Hz\nMost recent transform: 0.000 ( 2106.307 sec old)\nBuffer length: 0.000 sec\n"];
+"panda_link0" -> "panda_link1"[label="Broadcaster: /robot_state_publisher\nAverage rate: 30.223 Hz\nMost recent transform: 2106.300 ( 0.007 sec old)\nBuffer length: 4.566 sec\n"];
+"panda_link2" -> "panda_link2_sc"[label="Broadcaster: /robot_state_publisher\nAverage rate: 10000.000 Hz\nMost recent transform: 0.000 ( 2106.307 sec old)\nBuffer length: 0.000 sec\n"];
+"panda_link1" -> "panda_link2"[label="Broadcaster: /robot_state_publisher\nAverage rate: 30.223 Hz\nMost recent transform: 2106.300 ( 0.007 sec old)\nBuffer length: 4.566 sec\n"];
+"panda_link3" -> "panda_link3_sc"[label="Broadcaster: /robot_state_publisher\nAverage rate: 10000.000 Hz\nMost recent transform: 0.000 ( 2106.307 sec old)\nBuffer length: 0.000 sec\n"];
+"panda_link2" -> "panda_link3"[label="Broadcaster: /robot_state_publisher\nAverage rate: 30.223 Hz\nMost recent transform: 2106.300 ( 0.007 sec old)\nBuffer length: 4.566 sec\n"];
+"panda_link4" -> "panda_link4_sc"[label="Broadcaster: /robot_state_publisher\nAverage rate: 10000.000 Hz\nMost recent transform: 0.000 ( 2106.307 sec old)\nBuffer length: 0.000 sec\n"];
+"panda_link3" -> "panda_link4"[label="Broadcaster: /robot_state_publisher\nAverage rate: 30.223 Hz\nMost recent transform: 2106.300 ( 0.007 sec old)\nBuffer length: 4.566 sec\n"];
+"panda_link5" -> "panda_link5_sc"[label="Broadcaster: /robot_state_publisher\nAverage rate: 10000.000 Hz\nMost recent transform: 0.000 ( 2106.307 sec old)\nBuffer length: 0.000 sec\n"];
+"panda_link4" -> "panda_link5"[label="Broadcaster: /robot_state_publisher\nAverage rate: 30.223 Hz\nMost recent transform: 2106.300 ( 0.007 sec old)\nBuffer length: 4.566 sec\n"];
+"panda_link6" -> "panda_link6_sc"[label="Broadcaster: /robot_state_publisher\nAverage rate: 10000.000 Hz\nMost recent transform: 0.000 ( 2106.307 sec old)\nBuffer length: 0.000 sec\n"];
+"panda_link5" -> "panda_link6"[label="Broadcaster: /robot_state_publisher\nAverage rate: 30.223 Hz\nMost recent transform: 2106.300 ( 0.007 sec old)\nBuffer length: 4.566 sec\n"];
+"panda_link7" -> "panda_link7_sc"[label="Broadcaster: /robot_state_publisher\nAverage rate: 10000.000 Hz\nMost recent transform: 0.000 ( 2106.307 sec old)\nBuffer length: 0.000 sec\n"];
+"panda_link8" -> "panda_NE"[label="Broadcaster: /gazebo\nAverage rate: 28.760 Hz\nMost recent transform: 2106.295 ( 0.012 sec old)\nBuffer length: 4.555 sec\n"];
+"panda_NE" -> "panda_EE"[label="Broadcaster: /gazebo\nAverage rate: 28.760 Hz\nMost recent transform: 2106.295 ( 0.012 sec old)\nBuffer length: 4.555 sec\n"];
+"panda_EE" -> "panda_K"[label="Broadcaster: /gazebo\nAverage rate: 28.760 Hz\nMost recent transform: 2106.295 ( 0.012 sec old)\nBuffer length: 4.555 sec\n"];
+"panda_hand" -> "panda_leftfinger"[label="Broadcaster: /robot_state_publisher\nAverage rate: 30.223 Hz\nMost recent transform: 2106.300 ( 0.007 sec old)\nBuffer length: 4.566 sec\n"];
+"panda_hand" -> "panda_rightfinger"[label="Broadcaster: /robot_state_publisher\nAverage rate: 30.223 Hz\nMost recent transform: 2106.300 ( 0.007 sec old)\nBuffer length: 4.566 sec\n"];
+edge [style=invis];
+ subgraph cluster_legend { style=bold; color=black; label ="view_frames Result";
+"Recorded at time: 2106.307"[ shape=plaintext ] ;
+ }->"world";
+}

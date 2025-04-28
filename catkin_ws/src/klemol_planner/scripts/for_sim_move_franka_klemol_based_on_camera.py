@@ -48,29 +48,6 @@ class FrankaMotionController:
         self.ik_solver = IK("panda_link0", "panda_link8")
         self.lower_bounds, self.upper_bounds = self.ik_solver.get_joint_limits()
 
-        ##################################
-        ######### CUSTOM STUFF ###########
-        ##################################
-        camera_operations = CameraOperations()
-        panda_transformations = PandaTransformations(cam_operations=camera_operations)
-        panda_transformations.calibrate_camera()
-
-        # # Points in camera frame
-        # point_1 = PointWithOrientation(0.0, 0.0, 1.09, 0.0, 0.0, math.pi * 0.75)
-        # point_2 = PointWithOrientation(0.0, 0.1, 1.09, 0.0, 0.0, math.pi * 0.75)
-        # point_3 = PointWithOrientation(0.2307, -0.0728, 1.2, 0.0, 0.0, math.pi * 0.75)
-        # point_4 = PointWithOrientation(0.3, -0.3, 1.0, 0.0, 0.0, math.pi * 0.75)
-
-        # aruco_3_in_camera = PointWithOrientation(0.62, -0.16, 1.1, 0.0, 0.0, math.pi * 0.75)
-
-        # self.target_positions = [
-        #     panda_transformations.transform_point(point_1, 'camera', 'base'),
-        #     # panda_transformations.transform_point(point_2, 'camera', 'base'),
-        #     panda_transformations.transform_point(aruco_3_in_camera, 'camera', 'base'),
-        #     panda_transformations.transform_point(point_3, 'camera', 'base')
-        #     # panda_transformations.transform_point(point_4, 'camera', 'base')
-        # ]
-
         # Load config paths
         pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner")
         xacro_path = f"{pkg_root}/panda_description/panda.urdf.xacro"
@@ -96,6 +73,42 @@ class FrankaMotionController:
         # Storage for data comparison
         self.data_log = []
 
+        ##################################
+        ######### CUSTOM STUFF ###########
+        ##################################
+        camera_operations = CameraOperations()
+        panda_transformations = PandaTransformations(cam_operations=camera_operations)
+
+        panda_transformations.T_base_to_camera = np.array([[0, 1,  0, 0.35],
+                                                           [1, 0,  0, 0.0],
+                                                           [0, 0, -1, 1.4],
+                                                           [0, 0,  0, 1]])
+        panda_transformations.table_corners_translations = {
+            "corner_0": np.array([0.7, -0.4, 0.06]),# - self.z_calibration_constant]),
+            "corner_1": np.array([0.7,  0.4, 0.06]),# - self.z_calibration_constant]),
+            "corner_2": np.array([0.1,  0.4, 0.06]),# - self.z_calibration_constant]),
+            "corner_3": np.array([0.1, -0.4, 0.06])# - self.z_calibration_constant])
+        }
+        panda_transformations.calibrate_corners_relative_to_base()
+
+        # panda_transformations.visusalise_environment()
+
+        # # Points in camera frame
+        # point_1 = PointWithOrientation(0.0, 0.0, 1.09, 0.0, 0.0, math.pi * 0.75)
+        # point_2 = PointWithOrientation(0.0, 0.1, 1.09, 0.0, 0.0, math.pi * 0.75)
+        # point_3 = PointWithOrientation(0.2307, -0.0728, 1.2, 0.0, 0.0, math.pi * 0.75)
+        # point_4 = PointWithOrientation(0.3, -0.3, 1.0, 0.0, 0.0, math.pi * 0.75)
+
+        # aruco_3_in_camera = PointWithOrientation(0.62, -0.16, 1.1, 0.0, 0.0, math.pi * 0.75)
+
+        # self.target_positions = [
+        #     panda_transformations.transform_point(point_1, 'camera', 'base'),
+        #     # panda_transformations.transform_point(point_2, 'camera', 'base'),
+        #     panda_transformations.transform_point(aruco_3_in_camera, 'camera', 'base'),
+        #     panda_transformations.transform_point(point_3, 'camera', 'base')
+        #     # panda_transformations.transform_point(point_4, 'camera', 'base')
+        # ]
+
         #####################################
         # WE WILL BE MOVING TO THESE POINTS #
         #####################################
@@ -108,21 +121,12 @@ class FrankaMotionController:
         # point_4 = PointWithOrientation(0.0, 0.0, 1.0, 0.0, 0.0, -math.pi/4.0)
 
         table_corner_0 = PointWithOrientation(0.0, 0.0, 0.05, 0.0, math.pi, -math.pi)
+        table_corner_2 = PointWithOrientation(0.8 + 0.1, 0.6 + 0.1, 0.05, 0.0, math.pi, -math.pi)
         point_1 = PointWithOrientation(0.0, 0.0, 0.9, 0.0, 0.0, -math.pi/4.0)
 
-        # print("TRYING TO FIND A CUSTOM OBJECT")
-        # success, x, y, z = camera_operations.find_tennis()
-        # if success:
-        #     point_2 = PointWithOrientation(x, y, z, 0.0, 0.0, -math.pi/4.0)
-
-        #     print(f"X = {x} | Y = {y} | Z = {z}")
-        #     point_above_point2 = PointWithOrientation(x, y, z - 0.1, 0.0, 0.0, -math.pi/4.0)
-        # else:
-        #     point_2 = point_1
-        #     print("NO OBJECT DETECTED")
-        # print("OBJECT DETECTION DONE")
-        object_in_camera_frame = PointWithOrientation(0.15, 0.15, 1.2, 0.0, 0.0, -math.pi/4.0)
+        object_in_camera_frame = PointWithOrientation(0.15, 0.15, 1.2, 0.0, 0.05, -math.pi/4.0)
         object_in_base_frame = panda_transformations.transform_point(object_in_camera_frame, 'camera', 'base')
+
         point_above_object_in_base_frame = PointWithOrientation(
             object_in_base_frame.x,
             object_in_base_frame.y,
@@ -132,29 +136,8 @@ class FrankaMotionController:
             object_in_base_frame.yaw
         )
 
-        # Get all marker transforms in camera frame
-        marker_transforms = camera_operations.get_marker_transforms()
-
         # Prepare a dictionary for visualization
         visualisation_frames = {}
-
-        # Iterate over all detected corners
-        for corner_name in ["corner_0", "corner_1", "corner_2", "corner_3"]:
-            if corner_name not in marker_transforms:
-                print(f"[WARN] {corner_name} not detected.")
-                continue
-
-            # Extract translation
-            x, y, z = marker_transforms[corner_name][:3, 3]
-
-            # Construct a point in the camera frame
-            corner_cam = PointWithOrientation(x, y, z, 0.0, 0.0, 0.0)
-
-            # Transform to base frame
-            corner_base = panda_transformations.transform_point(corner_cam, 'camera', 'base')
-
-            # Store for visualization
-            visualisation_frames[f"{corner_name}_in_camera_frame"] = corner_base.as_matrix()
 
         # Optional: add any extra objects (e.g. a detected tennis ball)
         visualisation_frames["tennis"] = object_in_base_frame.as_matrix()
@@ -163,7 +146,7 @@ class FrankaMotionController:
         panda_transformations.visusalise_environment(visualisation_frames)
 
         self.target_positions = [
-            panda_transformations.transform_point(table_corner_0, 'table', 'base'),
+            panda_transformations.transform_point(table_corner_2, 'table', 'base'),
             panda_transformations.transform_point(point_1, 'camera', 'base'),
             point_above_object_in_base_frame,
             object_in_base_frame,
@@ -322,7 +305,7 @@ class FrankaMotionController:
             rospy.loginfo(f"Moving to position: {pos}")
             if i == 4:
                 self.move_gripper(False)
-                rospy.sleep(2)
+                rospy.sleep(5)
             self.move_to_pose_planner(pos)
 
         ####################################

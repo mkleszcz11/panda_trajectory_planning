@@ -157,7 +157,7 @@ class CameraOperations:
         # cv2.imshow("ArUco Detection", color_image)
         # Show it in scale
         cv2.imshow("ArUco Detection", cv2.resize(color_image, (1280, 720)))
-        cv2.waitKey(0)
+        cv2.waitKey(1)
 
         return detected_markers
 

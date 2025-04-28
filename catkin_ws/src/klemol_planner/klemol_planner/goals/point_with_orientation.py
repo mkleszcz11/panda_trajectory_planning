@@ -4,8 +4,13 @@ from scipy.spatial.transform import Rotation as R
 
 class PointWithOrientation:
     def __init__(self, x=0.0, y=0.0, z=0.0, roll=0.0, pitch=0.0, yaw=0.0):
-        self.set_position(x, y, z)
-        self.set_orientation(roll, pitch, yaw)
+        self.x = x
+        self.y = y
+        self.z = z
+        self.roll = roll
+        self.pitch = pitch
+        self.yaw = yaw
+
 
     def __str__(self):
         return f"PointWithOrientation(x={self.x}, y={self.y}, z={self.z}, roll={self.roll}, pitch={self.pitch}, yaw={self.yaw})"

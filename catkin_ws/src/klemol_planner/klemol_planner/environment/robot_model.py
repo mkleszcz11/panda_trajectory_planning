@@ -36,6 +36,7 @@ class RobotModel:
         """
         self.base_link = base_link
         self.ee_link = ee_link
+        self.hand_z_offset = 0.0
 
         # Load joint limits from YAML
         with open(joint_limits_path, 'r') as f:
