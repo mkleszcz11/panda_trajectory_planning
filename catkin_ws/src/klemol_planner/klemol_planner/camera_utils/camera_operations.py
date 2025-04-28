@@ -587,7 +587,7 @@ class CameraOperations:
             # Resize image to show it
             # img_resized = cv2.resize(color_image, (1280, 720))
             cv2.imshow("Detected Tennis Balls", color_image)
-            cv2.waitKey(1)
+            cv2.waitKey(0)
             cv2.destroyAllWindows()
 
             # Access the first ball's pixel coordinate
@@ -610,11 +610,6 @@ class CameraOperations:
             # Get depth value using the rescaled coordinates
             depth_value = depth.get_distance(u_rescaled, v_rescaled)  # Depth at the new scaled coordinates
             print(f"Depth at ball center (meters): {depth_value}")
-
-            # REMOVE REMOVE
-            depth_value_kek = depth.get_distance(x, y)  # Depth at the new scaled coordinates
-            print(f"Depth at ball center (meters) KEK: {depth_value_kek}")
-            # REMOVE REMOVE
 
             # Load camera intrinsics from RealSense
             profile = self.pipeline.get_active_profile()

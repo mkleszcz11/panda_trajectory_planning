@@ -39,6 +39,22 @@ class PandaTransformations:
 
         # Compute transformation matrices for each corner
         self.T_base_to_corners_dict = {}
+        self.calibrate_corners_relative_to_base()
+
+        # Initialize storage for camera transformations per corner
+        self.T_table_corners_to_camera_dict = {}
+        self.T_base_to_camera_dict = {}
+
+        # Transformation from camera to object frame will be updated based on object pose
+        self.T_camera_to_object = np.eye(4)
+
+    def calibrate_corners_relative_to_base(self) -> None:
+        """
+        Calibrate the corners relative to the base frame.
+        Call this function if you want to update the corner positions in the base frame (for instance
+        in simulation environment).
+        """
+        print("[INFO] Calibrating corners relative to base...")
         for corner_name, translation in self.table_corners_translations.items():
             rpy = self.table_corners_rpy[corner_name]
             rotation_matrix = tf_trans.euler_matrix(*rpy)  # returns 4x4
@@ -46,31 +62,6 @@ class PandaTransformations:
             transform[:3, :3] = rotation_matrix[:3, :3]  # copy rotation
             transform[:3, 3] = translation  # set translation
             self.T_base_to_corners_dict[corner_name] = transform
-
-        # Print all possible base to camera dict #
-        for btc in self.T_base_to_corners_dict:
-            formatted = np.array2string(
-                self.T_base_to_corners_dict[btc],
-                formatter={'float_kind': lambda x: f"{x:.2f}"}
-            )
-            print(f"base to corner {btc} =\n{formatted}")
-
-        # Initialize storage for camera transformations per corner
-        self.T_table_corners_to_camera_dict = {}
-        self.T_base_to_camera_dict = {}
-
-        self.calibrate_camera() # T_base_to_camera is computed here
-
-        # Print all possible base to camera dict #
-        for corner in self.T_base_to_camera_dict:
-            formatted = np.array2string(
-                self.T_base_to_camera_dict[corner],
-                formatter={'float_kind': lambda x: f"{x:.2f}"}
-            )
-            print(f"transformation based on {corner} =\n{formatted}")
-
-        # Transformation from camera to object frame will be updated based on object pose
-        self.T_camera_to_object = np.eye(4)
 
     def calibrate_camera(self) -> None:
         """
@@ -262,7 +253,8 @@ class PandaTransformations:
                             camera_origin: np.ndarray = np.array([[0], [0]]),
                             rotation: np.ndarray = None,
                             mode: str = 'separate',
-                            plot_title: str = "Camera Calibration") -> None:
+                            plot_title: str = "Camera Calibration",
+                            show_plot: bool = False) -> None:
         """
         Helper to visualize the environment.
 
@@ -375,6 +367,9 @@ class PandaTransformations:
             ax.set_ylabel("Y [m]")
             plt.tight_layout()
 
+        if show_plot:
+            plt.show()
+
     def get_average_transform_to_camera(self) -> np.ndarray:
         """
         Compute average base→camera transformation from multiple corner observations.
@@ -479,7 +474,7 @@ class PandaTransformations:
             new_orientation[0], new_orientation[1], new_orientation[2]
         )
 
-    def visusalise_environment(self, T_additional_to_visualise_dict: dict = None, show_points_orientation: bool = True) -> None:
+    def visusalise_environment(self, T_additional_to_visualise_dict: dict = {}, show_points_orientation: bool = True) -> None:
         """
         Visualize the environment with:
         - Table corners (base frame)
@@ -489,6 +484,10 @@ class PandaTransformations:
         Args:
             T_additional_to_visualise_dict - transformations to include in the visualisation {tf_name, tf} 
         """
+        # Disregard all previous plots
+        plt.close('all')
+
+
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         ax.set_title("Environment Overview")

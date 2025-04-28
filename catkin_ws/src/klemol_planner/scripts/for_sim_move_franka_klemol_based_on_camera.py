@@ -15,6 +15,7 @@ import tf.transformations as tf_trans
 import numpy as np
 import csv
 import time
+
 from trac_ik_python.trac_ik import IK
 from klemol_planner.environment.environment_transformations import PandaTransformations
 from klemol_planner.goals.point_with_orientation import PointWithOrientation
@@ -42,6 +43,7 @@ class FrankaMotionController:
         ## MOVEIT STUFF - TO BE REMOVED ##
         ##################################
         moveit_commander.roscpp_initialize([])
+        
         self.robot = moveit_commander.RobotCommander()
         self.scene = moveit_commander.PlanningSceneInterface()
         self.group = moveit_commander.MoveGroupCommander("panda_arm")
@@ -71,68 +73,67 @@ class FrankaMotionController:
         rrt_params = load_planner_params("rrt")
         rrt_star_params = load_planner_params("rrt_star")
 
+        # Initialize custom planner
         # self.custom_planner = RRTPlanner(self.robot_model, self.collision_checker, rrt_params)
         # self.custom_planner = RRTStarPlanner(self.robot_model, self.collision_checker, rrt_star_params)
         self.custom_planner = RRTWithConnectingPlanner(self.robot_model, self.collision_checker, rrt_params)
-
         # Storage for data comparison
         self.data_log = []
-
-        ###################
-        ## MOVE TO POSE 0 #
-        ###################
-        self.start_joint_config = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]  # Standard base pose
-        # self.start_joint_config = [0, 0, 0, -0.1, 0, math.pi / 2.0, 0] # Vertical starting pose
-        self.move_to_joint_config(self.start_joint_config)
-
 
         ##################################
         ######### CUSTOM STUFF ###########
         ##################################
         camera_operations = CameraOperations()
         panda_transformations = PandaTransformations(cam_operations=camera_operations)
-        panda_transformations.calibrate_camera()
+
+        panda_transformations.T_base_to_camera = np.array([[0, 1,  0, 0.35],
+                                                           [1, 0,  0, 0.0],
+                                                           [0, 0, -1, 1.4],
+                                                           [0, 0,  0, 1]])
+        panda_transformations.table_corners_translations = {
+            "corner_0": np.array([0.7, -0.4, 0.06]),# - self.z_calibration_constant]),
+            "corner_1": np.array([0.7,  0.4, 0.06]),# - self.z_calibration_constant]),
+            "corner_2": np.array([0.1,  0.4, 0.06]),# - self.z_calibration_constant]),
+            "corner_3": np.array([0.1, -0.4, 0.06])# - self.z_calibration_constant])
+        }
+        panda_transformations.calibrate_corners_relative_to_base()
+
+        panda_transformations.visusalise_environment()
+
+        # # Points in camera frame
+        # point_1 = PointWithOrientation(0.0, 0.0, 1.09, 0.0, 0.0, math.pi * 0.75)
+        # point_2 = PointWithOrientation(0.0, 0.1, 1.09, 0.0, 0.0, math.pi * 0.75)
+        # point_3 = PointWithOrientation(0.2307, -0.0728, 1.2, 0.0, 0.0, math.pi * 0.75)
+        # point_4 = PointWithOrientation(0.3, -0.3, 1.0, 0.0, 0.0, math.pi * 0.75)
+
+        # aruco_3_in_camera = PointWithOrientation(0.62, -0.16, 1.1, 0.0, 0.0, math.pi * 0.75)
+
+        # self.target_positions = [
+        #     panda_transformations.transform_point(point_1, 'camera', 'base'),
+        #     # panda_transformations.transform_point(point_2, 'camera', 'base'),
+        #     panda_transformations.transform_point(aruco_3_in_camera, 'camera', 'base'),
+        #     panda_transformations.transform_point(point_3, 'camera', 'base')
+        #     # panda_transformations.transform_point(point_4, 'camera', 'base')
+        # ]
 
         #####################################
         # WE WILL BE MOVING TO THESE POINTS #
         #####################################
         # Define fixed joint configuration for consistent execution
+        self.start_joint_config = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]  # Joint angles in radians
         # Points in camera frame
         # point_1 = PointWithOrientation(0.0, 0.0, 1.1, 0.0, 0.0, -math.pi/4.0)
         # point_2 = PointWithOrientation(0.3, 0.3, 1.0, 0.0, 0.0, -math.pi/4.0)
         # point_3 = PointWithOrientation(-0.3, -0.3, 1.0, 0.0, 0.0, -math.pi/4.0)
         # point_4 = PointWithOrientation(0.0, 0.0, 1.0, 0.0, 0.0, -math.pi/4.0)
+
         table_corner_0 = PointWithOrientation(0.0, 0.0, 0.05, 0.0, math.pi, -math.pi)
-<<<<<<< HEAD
-        point_1 = PointWithOrientation(0.0, 0.0, 0.9, 0.0, 0.0, -math.pi / 4.0)
-=======
+        table_corner_2 = PointWithOrientation(0.8 + 0.1, 0.6 + 0.1, 0.05, 0.0, math.pi, -math.pi)
         point_1 = PointWithOrientation(0.0, 0.0, 0.9, 0.0, 0.0, math.pi * 0.75)
->>>>>>> temp
 
-        print("TRYING TO FIND A CUSTOM OBJECT")
-        if camera_operations.USE_REALSENSE:
-            success, x, y, z = camera_operations.find_tennis()
-        else:
-            success = True
-            x, y, z = 0.01, 0.01, 1.0
-        if success:
-<<<<<<< HEAD
-            point_2 = PointWithOrientation(x, y, z, 0.0, 0.0, -math.pi / 4.0)
+        object_in_camera_frame = PointWithOrientation(0.15, 0.15, 1.2, 0.0, 0.05, math.pi * 0.75)
+        object_in_base_frame = panda_transformations.transform_point(object_in_camera_frame, 'camera', 'base')
 
-            print(f"X = {x} | Y = {y} | Z = {z}")
-            point_above_point2 = PointWithOrientation(x, y, z - 0.1, 0.0, 0.0, -math.pi / 4.0)
-=======
-            object_in_camera_frame = PointWithOrientation(x, y, z, 0.0, 0.0, math.pi * 0.75)
-            object_in_base_frame = panda_transformations.transform_point(object_in_camera_frame, 'camera', 'base')
-
-            print(f"X = {x} | Y = {y} | Z = {z}")
->>>>>>> temp
-        else:
-            object_in_camera_frame = point_1
-            print("NO OBJECT DETECTED")
-        print("OBJECT DETECTION DONE")
-        # object_in_camera_frame = PointWithOrientation(0.15, 0.15, 1.2, 0.0, 0.0, -math.pi/4.0)
-        # object_in_base_frame = panda_transformations.transform_point(object_in_camera_frame, 'camera', 'base')
         point_above_object_in_base_frame = PointWithOrientation(
             object_in_base_frame.x,
             object_in_base_frame.y,
@@ -142,82 +143,17 @@ class FrankaMotionController:
             object_in_base_frame.yaw
         )
 
-<<<<<<< HEAD
-        transformed_p2 = panda_transformations.transform_point(point_2, 'camera', 'base')
-
-=======
->>>>>>> temp
-        # Get all marker transforms in camera frame
-        marker_transforms = camera_operations.get_marker_transforms()
-
         # Prepare a dictionary for visualization
         visualisation_frames = {}
 
-        # Iterate over all detected corners
-        for corner_name in ["corner_0", "corner_1", "corner_2", "corner_3"]:
-            if corner_name not in marker_transforms:
-                print(f"[WARN] {corner_name} not detected.")
-                continue
-
-            # Extract translation
-            x, y, z = marker_transforms[corner_name][:3, 3]
-
-            # Construct a point in the camera frame
-            corner_cam = PointWithOrientation(x, y, z, 0.0, 0.0, 0.0)
-
-            # Transform to base frame
-            corner_base = panda_transformations.transform_point(corner_cam, 'camera', 'base')
-
-            # Store for visualization
-            visualisation_frames[f"{corner_name}_in_camera_frame"] = corner_base.as_matrix()
-
-<<<<<<< HEAD
-        # Process box markers (10 and 11)
-        # Default to point_1 if not detected
-        point_box_1 = panda_transformations.transform_point(point_1, 'camera', 'base')
-        point_box_2 = panda_transformations.transform_point(point_1, 'camera', 'base')
-
-        # Check for marker 10 (box_1)
-        if "marker_10" in marker_transforms:
-            x, y, z = marker_transforms["marker_10"][:3, 3]
-            box_cam = PointWithOrientation(x, y, z, 0.0, 0.0, 0.0)
-            point_box_1 = panda_transformations.transform_point(box_cam, 'camera', 'base')
-            visualisation_frames["box_1_in_camera_frame"] = point_box_1.as_matrix()
-        else:
-            print("[WARN] marker_10 (box_1) not detected. Using point_1 instead.")
-
-        # Check for marker 11 (box_2)
-        if "marker_11" in marker_transforms:
-            x, y, z = marker_transforms["marker_11"][:3, 3]
-            box_cam = PointWithOrientation(x, y, z, 0.0, 0.0, 0.0)
-            point_box_2 = panda_transformations.transform_point(box_cam, 'camera', 'base')
-            visualisation_frames["box_2_in_camera_frame"] = point_box_2.as_matrix()
-        else:
-            print("[WARN] marker_11 (box_2) not detected. Using point_1 instead.")
-
-        # Add tennis ball to visualization
-        visualisation_frames["tennis"] = transformed_p2.as_matrix()
-=======
         # Optional: add any extra objects (e.g. a detected tennis ball)
         visualisation_frames["tennis"] = object_in_base_frame.as_matrix()
->>>>>>> temp
 
         # Visualise
-        # panda_transformations.visusalise_environment(visualisation_frames)
+        panda_transformations.visusalise_environment(visualisation_frames)
 
-        # Define target positions including boxes
         self.target_positions = [
-<<<<<<< HEAD
-            panda_transformations.transform_point(table_corner_0, 'table', 'base'),
-            panda_transformations.transform_point(point_1, 'camera', 'base'),
-            panda_transformations.transform_point(point_above_point2, 'camera', 'base'),
-            panda_transformations.transform_point(point_2, 'camera', 'base'),
-            panda_transformations.transform_point(point_above_point2, 'camera', 'base'),
-            panda_transformations.transform_point(point_1, 'camera', 'base'),
-            point_box_1,
-            point_box_2
-=======
-            # panda_transformations.transform_point(table_corner_0, 'table', 'base'),
+            # panda_transformations.transform_point(table_corner_2, 'table', 'base'),
             # panda_transformations.transform_point(point_1, 'camera', 'base'),
             point_above_object_in_base_frame,
             object_in_base_frame,
@@ -226,46 +162,39 @@ class FrankaMotionController:
             # panda_transformations.transform_point(point_2, 'camera', 'base'),
             # panda_transformations.transform_point(point_3, 'camera', 'base'),
             # panda_transformations.transform_point(point_4, 'camera', 'base')
->>>>>>> temp
         ]
 
     def move_to_joint_config(self, joint_config):
         """Move the robot to a specific joint configuration."""
-        self.group.clear_pose_targets()
         self.group.set_joint_value_target(joint_config)
         rospy.loginfo(f"Moving to joint configuration: {joint_config}")
+        start_time = time.time()
         self.group.go(wait=True)
-        self.group.plan()
+        end_time = time.time()
+        self.log_data(joint_config, "Fixed Joint Configuration", start_time, end_time)
 
-    # def move_to_pose_trac_ik(self, position: PointWithOrientation):
-    #     """Move the robot using TRAC-IK"""
-    #     x, y, z = position.x, position.y, position.z
-    #     roll, pitch, yaw = position.roll, position.pitch, position.yaw
-    #     quaternion = tf_trans.quaternion_from_euler(roll, pitch, yaw)
-    #     seed_state = np.random.uniform(self.lower_bounds, self.upper_bounds)  # Random seed
-    #     # joint_positions = self.ik_solver.get_ik(seed_state, x, y, z, *quaternion)
-    #     joint_positions = self.group.get_current_joint_values()
-    #     print(f"JOINT POSITIONS: {joint_positions}")
+    def move_to_pose_trac_ik(self, position: PointWithOrientation):
+        """Move the robot using TRAC-IK"""
+        x, y, z = position.x, position.y, position.z
+        roll, pitch, yaw = position.roll, position.pitch, position.yaw
+        quaternion = tf_trans.quaternion_from_euler(roll, pitch, yaw)
+        seed_state = np.random.uniform(self.lower_bounds, self.upper_bounds)  # Random seed
+        joint_positions = self.ik_solver.get_ik(seed_state, x, y, z, *quaternion)
 
-    #     if joint_positions:
-    #         rospy.loginfo(f"TRAC-IK Solution Found for ({x}, {y}, {z})")
-    #         self.execute_joint_positions(joint_positions, "TRAC-IK")
-    #     else:
-    #         rospy.logerr("No IK solution found!")
+        if joint_positions:
+            rospy.loginfo(f"TRAC-IK Solution Found for ({x}, {y}, {z})")
+            self.execute_joint_positions(joint_positions, "TRAC-IK")
+        else:
+            rospy.logerr("No IK solution found!")
 
     def execute_joint_positions(self, joint_positions, method):
         """Execute a joint position command and log the data"""
-        self.group.clear_pose_targets()
-        rospy.loginfo(f"====== Moving to joint configurations: {joint_positions}")
-        self.group.set_max_velocity_scaling_factor(0.6)      # scale speed
-        self.group.set_max_acceleration_scaling_factor(0.4)  # scale acceleration
-        for pos in joint_positions:
-            #try:
-            print(f"executing position: {pos}")
-            self.group.set_joint_value_target(joint_positions)
-            self.group.plan()
-            self.group.go(wait=True)
+        self.group.set_joint_value_target(joint_positions)
+        start_time = time.time()
+        self.group.go(wait=True)
+        end_time = time.time()
 
+        self.log_data(joint_positions, method, start_time, end_time)
 
     def move_to_pose_planner(self, pose: PointWithOrientation):
         """Move the robot using MoveIt's motion planner"""
@@ -284,8 +213,6 @@ class FrankaMotionController:
         pose_target.orientation.w = quaternion[3]
 
         # Set target and execute
-        # self.group.set_max_velocity_scaling_factor(0.6)      # scale speed
-        # self.group.set_max_acceleration_scaling_factor(0.2)  # scale acceleration
         self.group.set_pose_target(pose_target)
         start_time = time.time()
         success = self.group.go(wait=True)
@@ -318,37 +245,33 @@ class FrankaMotionController:
         rospy.loginfo(f"Data saved to {filename}")
 
     def move_gripper(self, open_gripper: bool):
+        """
+        Open or close the gripper
+        Args:
+            open_gripper: True to open, False to close
+        """
         if open_gripper:
-            print(f"OPENING GRIPPER")
             client = actionlib.SimpleActionClient('/franka_gripper/move', MoveAction)
             client.wait_for_server()
 
             goal = MoveGoal()
-            goal.width = 0.08  # fully open
+            goal.width = 0.08     # fully open (max 0.08 m)
             goal.speed = 0.1
             client.send_goal(goal)
             client.wait_for_result()
 
         else:
-            print(f"CLOSING GRIPPER")
             client = actionlib.SimpleActionClient('/franka_gripper/grasp', GraspAction)
             client.wait_for_server()
 
             goal = GraspGoal()
-            goal.width = 0.02
+            goal.width = 0.00     # fully closed
             goal.speed = 0.1
-            goal.force = 5
-            goal.epsilon.inner = 0.0
-            goal.epsilon.outer = 0.06
-
+            goal.force = 60.0     # closing force (adjust based on object)
+            goal.epsilon.inner = 0.005
+            goal.epsilon.outer = 0.005
             client.send_goal(goal)
             client.wait_for_result()
-            result = client.get_result()
-
-            if not result.success:
-                rospy.logwarn("Gripper: grasp failed.")
-            else:
-                rospy.loginfo("Gripper: grasp succeeded.")
 
     def execute(self):
         """Main execution sequence"""
@@ -378,63 +301,38 @@ class FrankaMotionController:
         # box_pose.pose.position.z = 0.19  # box center height
         # box_pose.pose.orientation.w = 1.0  # neutral orientation
 
-        # # self.scene.add_box("table_box", box_pose, size=(0.6, 0.8, 0.02))  # (x, y, z) dimensions in meters
+        # self.scene.add_box("table_box", box_pose, size=(0.6, 0.8, 0.02))  # (x, y, z) dimensions in meters
         # rospy.sleep(1.0)  # Give time for the scene to update
 
         # rospy.loginfo("Executing predefined movements using MoveIt Trajectory Planner")
         # self.move_gripper(True)
 
         # for i, pos in enumerate(self.target_positions):
-        #     if i == 2:
-        #         self.move_gripper(False)
-        #         rospy.sleep(2)
-
-        #     execute_linear = (i == 1) or (i == 2)
-        #     if execute_linear:
-        #         waypoints = []
-        #         target_pose = self.group.get_current_pose().pose
-        #         target_pose.position.x = pos.x
-        #         target_pose.position.y = pos.y
-        #         target_pose.position.z = pos.z
-        #         waypoints.append(target_pose)
-
-        #         (plan, fraction) = self.group.compute_cartesian_path(waypoints, 0.01, True)
-
-        #         if fraction < 1.0:
-        #             rospy.logwarn(f"Cartesian plan only achieved {fraction*100:.1f}% of path")
-        #         else:
-        #             # Retiming for ROS Noetic
-        #             retimed_plan = self.group.retime_trajectory(
-        #                 self.robot.get_current_state(),
-        #                 plan,
-        #                 velocity_scaling_factor=0.2,
-        #                 acceleration_scaling_factor=0.2
-        #             )
-        #             self.group.execute(retimed_plan, wait=True)
-        #             continue
-
         #     print(f"Moving to position: {pos}, type: {type(pos)}")
         #     rospy.loginfo(f"Moving to position: {pos}")
-
+        #     if i == 4:
+        #         self.move_gripper(False)
+        #         rospy.sleep(1)
         #     self.move_to_pose_planner(pos)
 
         ####################################
         #### CUSTOM TRAJECTORY PLANNER #####
         ####################################
         rospy.loginfo("Returning to Start Joint Configuration after execution")
+        self.move_to_joint_config(self.start_joint_config)
 
         # Close gripper, wait 3s, open gripper
-        self.move_gripper(False)
-        rospy.sleep(1)
+        # self.move_gripper(False)
+        # rospy.sleep(1)
         self.move_gripper(True)
-        rospy.sleep(1)
+        # rospy.sleep(1)
 
         rospy.loginfo("Executing predefined movements using custom Trajectory Planner")
         for i,pos in enumerate(self.target_positions):
             if i == 2:
                 self.move_gripper(False)
                 rospy.sleep(1)
-
+        
             execute_linear = (i == 1) or (i == 2)
             if execute_linear:
                 waypoints = []
@@ -459,6 +357,7 @@ class FrankaMotionController:
                     self.group.execute(retimed_plan, wait=True)
                     continue
 
+
             # THIS IS CUSTOM PLANNER
             current_config = np.array(self.group.get_current_joint_values())
             self.custom_planner.set_start(current_config)
@@ -476,7 +375,6 @@ class FrankaMotionController:
             else:
                 rospy.logwarn("RRT planner failed to find a path.")
 
-        self.move_to_joint_config(self.start_joint_config)
         # # Save data for comparison
         # self.save_data()
         # rospy.loginfo("Execution complete.")

@@ -5,11 +5,11 @@
 
   <!-- Spawn a table as a simple slab -->
   <node name="spawn_table" pkg="gazebo_ros" type="spawn_model"
-        args="-file $(find franka_test)/models/table/table.sdf -sdf -model table -x 0 -y 0 -z 0" />
+        args="-file $(find franka_test)/models/table/table.sdf -sdf -model table -x 0.4 -y 0 -z 0.05" />
 
   <!-- Spawn Camera -->
   <node name="spawn_camera" pkg="gazebo_ros" type="spawn_model"
-        args="-file $(find franka_test)/models/mock_camera/mock_camera.sdf -sdf -model mock_camera -x 0.35 -y 0 -z 1.5" />
+        args="-file $(find franka_test)/models/mock_camera/mock_camera.sdf -sdf -model mock_camera -x 0.35 -y 0 -z 1.4" />
 
   <!-- Spawn a red box somewhere on a table -->
   <node name="spawn_red_box" pkg="gazebo_ros" type="spawn_model"
