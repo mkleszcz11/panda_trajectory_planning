@@ -72,7 +72,7 @@ class FrankaMotionController:
         # ]
 
         # Load config paths
-        pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner")
+        pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner")
         xacro_path = f"{pkg_root}/panda_description/panda.urdf.xacro"
         urdf_string = subprocess.check_output(["xacro", xacro_path]).decode("utf-8")
         joint_limits_path = f"{pkg_root}/config/joint_limits.yaml"
@@ -92,7 +92,7 @@ class FrankaMotionController:
         rrt_params = load_planner_params("rrt")
 
         # Initialize custom planner
-        self.rrt_planner = RRTPlanner(self.robot_model, self.collision_checker, rrt_params)
+        self.custom_planner = RRTPlanner(self.robot_model, self.collision_checker, rrt_params)
         # Storage for data comparison
         self.data_log = []
 
@@ -339,9 +339,9 @@ class FrankaMotionController:
         rospy.loginfo("Executing predefined movements using custom Trajectory Planner")
         for i,pos in enumerate(self.target_positions):
             current_config = np.array(self.group.get_current_joint_values())
-            self.rrt_planner.set_start(current_config)
-            self.rrt_planner.set_goal(pos)
-            path, success = self.rrt_planner.plan()
+            self.custom_planner.set_start(current_config)
+            self.custom_planner.set_goal(pos)
+            path, success = self.custom_planner.plan()
 
             # Call shortcutting function (edit path)
             path_shortcutter = PathShortcutter(self.collision_checker)
