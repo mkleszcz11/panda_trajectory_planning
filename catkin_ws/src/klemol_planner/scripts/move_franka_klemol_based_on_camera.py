@@ -72,7 +72,7 @@ class FrankaMotionController:
         # ]
 
         # Load config paths
-        pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner")
+        pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner")
         xacro_path = f"{pkg_root}/panda_description/panda.urdf.xacro"
         urdf_string = subprocess.check_output(["xacro", xacro_path]).decode("utf-8")
         joint_limits_path = f"{pkg_root}/config/joint_limits.yaml"
@@ -110,19 +110,19 @@ class FrankaMotionController:
         table_corner_0 = PointWithOrientation(0.0, 0.0, 0.05, 0.0, math.pi, -math.pi)
         point_1 = PointWithOrientation(0.0, 0.0, 0.9, 0.0, 0.0, -math.pi/4.0)
 
-        # print("TRYING TO FIND A CUSTOM OBJECT")
-        # success, x, y, z = camera_operations.find_tennis()
-        # if success:
-        #     point_2 = PointWithOrientation(x, y, z, 0.0, 0.0, -math.pi/4.0)
+        print("TRYING TO FIND A CUSTOM OBJECT")
+        success, x, y, z = camera_operations.find_tennis()
+        if success:
+            object_in_camera_frame = PointWithOrientation(x, y, z, 0.0, 0.0, -math.pi/4.0)
+            object_in_base_frame = panda_transformations.transform_point(object_in_camera_frame, 'camera', 'base')
 
-        #     print(f"X = {x} | Y = {y} | Z = {z}")
-        #     point_above_point2 = PointWithOrientation(x, y, z - 0.1, 0.0, 0.0, -math.pi/4.0)
-        # else:
-        #     point_2 = point_1
-        #     print("NO OBJECT DETECTED")
-        # print("OBJECT DETECTION DONE")
-        object_in_camera_frame = PointWithOrientation(0.15, 0.15, 1.2, 0.0, 0.0, -math.pi/4.0)
-        object_in_base_frame = panda_transformations.transform_point(object_in_camera_frame, 'camera', 'base')
+            print(f"X = {x} | Y = {y} | Z = {z}")
+        else:
+            object_in_camera_frame = point_1
+            print("NO OBJECT DETECTED")
+        print("OBJECT DETECTION DONE")
+        # object_in_camera_frame = PointWithOrientation(0.15, 0.15, 1.2, 0.0, 0.0, -math.pi/4.0)
+        # object_in_base_frame = panda_transformations.transform_point(object_in_camera_frame, 'camera', 'base')
         point_above_object_in_base_frame = PointWithOrientation(
             object_in_base_frame.x,
             object_in_base_frame.y,
@@ -163,7 +163,7 @@ class FrankaMotionController:
         panda_transformations.visusalise_environment(visualisation_frames)
 
         self.target_positions = [
-            panda_transformations.transform_point(table_corner_0, 'table', 'base'),
+            # panda_transformations.transform_point(table_corner_0, 'table', 'base'),
             panda_transformations.transform_point(point_1, 'camera', 'base'),
             point_above_object_in_base_frame,
             object_in_base_frame,
@@ -289,9 +289,9 @@ class FrankaMotionController:
         ####################
         ##### TRACK IK #####
         ####################
-        # # # Move to fixed starting joint configuration before each method
-        # rospy.loginfo("Moving to Start Joint Configuration before TRAC-IK execution")
-        # self.move_to_joint_config(self.start_joint_config)
+        # Move to fixed starting joint configuration before each method
+        rospy.loginfo("Moving to Start Joint Configuration before TRAC-IK execution")
+        self.move_to_joint_config(self.start_joint_config)
 
         # rospy.loginfo("Executing predefined movements using TRAC-IK")
         # for pos in self.target_positions:
@@ -314,45 +314,49 @@ class FrankaMotionController:
         # self.scene.add_box("table_box", box_pose, size=(0.6, 0.8, 0.02))  # (x, y, z) dimensions in meters
         # rospy.sleep(1.0)  # Give time for the scene to update
 
-        rospy.loginfo("Executing predefined movements using MoveIt Trajectory Planner")
-        self.move_gripper(True)
+        # rospy.loginfo("Executing predefined movements using MoveIt Trajectory Planner")
+        # self.move_gripper(True)
 
-        for i, pos in enumerate(self.target_positions):
-            print(f"Moving to position: {pos}, type: {type(pos)}")
-            rospy.loginfo(f"Moving to position: {pos}")
-            if i == 4:
-                self.move_gripper(False)
-                rospy.sleep(2)
-            self.move_to_pose_planner(pos)
+        # for i, pos in enumerate(self.target_positions):
+        #     print(f"Moving to position: {pos}, type: {type(pos)}")
+        #     rospy.loginfo(f"Moving to position: {pos}")
+        #     if i == 4:
+        #         self.move_gripper(False)
+        #         rospy.sleep(1)
+        #     self.move_to_pose_planner(pos)
 
         ####################################
         #### CUSTOM TRAJECTORY PLANNER #####
         ####################################
-        # rospy.loginfo("Returning to Start Joint Configuration after execution")
-        # self.move_to_joint_config(self.start_joint_config)
+        rospy.loginfo("Returning to Start Joint Configuration after execution")
+        self.move_to_joint_config(self.start_joint_config)
 
-        # # Close gripper, wait 10s, open gripper
-        # self.move_gripper(False)
-        # rospy.sleep(10)
-        # self.move_gripper(True)
+        # Close gripper, wait 3s, open gripper
+        self.move_gripper(False)
+        rospy.sleep(2)
+        self.move_gripper(True)
 
-        # rospy.loginfo("Executing predefined movements using custom Trajectory Planner")
-        # for pos in self.target_positions:
-        #     current_config = np.array(self.group.get_current_joint_values())
-        #     self.rrt_planner.set_start(current_config)
-        #     self.rrt_planner.set_goal(pos)
-        #     path, success = self.rrt_planner.plan()
+        rospy.loginfo("Executing predefined movements using custom Trajectory Planner")
+        for i,pos in enumerate(self.target_positions):
+            current_config = np.array(self.group.get_current_joint_values())
+            self.rrt_planner.set_start(current_config)
+            self.rrt_planner.set_goal(pos)
+            path, success = self.rrt_planner.plan()
 
-        #     # Call shortcutting function (edit path)
-        #     path_shortcutter = PathShortcutter(self.collision_checker)
-        #     path = path_shortcutter.generate_a_shortcutted_path(path)
+            # Call shortcutting function (edit path)
+            path_shortcutter = PathShortcutter(self.collision_checker)
+            path = path_shortcutter.generate_a_shortcutted_path(path)
 
-        #     if success:
-        #         rospy.loginfo(f"RRT path found with {len(path)} waypoints.")
-        #         for config in path:
-        #             self.execute_joint_positions(config, "Custom RRT")
-        #     else:
-        #         rospy.logwarn("RRT planner failed to find a path.")
+            if i == 3:
+                self.move_gripper(False)
+                rospy.sleep(2)
+
+            if success:
+                rospy.loginfo(f"RRT path found with {len(path)} waypoints.")
+                for config in path:
+                    self.execute_joint_positions(config, "Custom RRT")
+            else:
+                rospy.logwarn("RRT planner failed to find a path.")
 
         # # Save data for comparison
         # self.save_data()
