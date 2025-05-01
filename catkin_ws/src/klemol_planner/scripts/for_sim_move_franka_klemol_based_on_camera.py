@@ -26,6 +26,7 @@ from klemol_planner.environment.robot_model import RobotModel
 from klemol_planner.environment.collision_checker import CollisionChecker
 from klemol_planner.planners.rrt import RRTPlanner
 from klemol_planner.planners.rrt_star import RRTStarPlanner
+from klemol_planner.planners.rrt_with_connecting import RRTWithConnectingPlanner
 from klemol_planner.utils.config_loader import load_planner_params
 
 import actionlib
@@ -50,7 +51,7 @@ class FrankaMotionController:
         self.lower_bounds, self.upper_bounds = self.ik_solver.get_joint_limits()
 
         # Load config paths
-        pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner")
+        pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner")
         xacro_path = f"{pkg_root}/panda_description/panda.urdf.xacro"
         urdf_string = subprocess.check_output(["xacro", xacro_path]).decode("utf-8")
         joint_limits_path = f"{pkg_root}/config/joint_limits.yaml"
@@ -72,7 +73,8 @@ class FrankaMotionController:
 
         # Initialize custom planner
         # self.custom_planner = RRTPlanner(self.robot_model, self.collision_checker, rrt_params)
-        self.custom_planner = RRTStarPlanner(self.robot_model, self.collision_checker, rrt_star_params)
+        # self.custom_planner = RRTStarPlanner(self.robot_model, self.collision_checker, rrt_star_params)
+        self.custom_planner = RRTWithConnectingPlanner(self.robot_model, self.collision_checker, rrt_params)
         # Storage for data comparison
         self.data_log = []
 
@@ -319,7 +321,7 @@ class FrankaMotionController:
 
         # Close gripper, wait 3s, open gripper
         self.move_gripper(False)
-        rospy.sleep(2)
+        rospy.sleep(1)
         self.move_gripper(True)
 
         rospy.loginfo("Executing predefined movements using custom Trajectory Planner")
@@ -329,13 +331,13 @@ class FrankaMotionController:
             self.custom_planner.set_goal(pos)
             path, success = self.custom_planner.plan()
 
-            # Call shortcutting function (edit path)
-            path_shortcutter = PathShortcutter(self.collision_checker)
-            path = path_shortcutter.generate_a_shortcutted_path(path)
+            # # Call shortcutting function (edit path)
+            # path_shortcutter = PathShortcutter(self.collision_checker)
+            # path = path_shortcutter.generate_a_shortcutted_path(path)
 
             if i == 3:
                 self.move_gripper(False)
-                rospy.sleep(2)
+                rospy.sleep(1)
 
             if success:
                 rospy.loginfo(f"RRT path found with {len(path)} waypoints.")

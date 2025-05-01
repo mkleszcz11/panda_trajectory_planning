@@ -94,7 +94,7 @@ class RobotModel:
         sol = self.ik_solver.get_ik(seed, pose.x, pose.y, pose.z, *quaternion)
         return np.array(sol) if sol is not None else None
     
-    def ik_with_custom_solver(self, pose: PointWithOrientation, solver: IK) -> t.Optional[np.ndarray]:
+    def ik_with_custom_solver(self, pose: PointWithOrientation, solver: IK, seed: np.ndarray) -> t.Optional[np.ndarray]:
         quaternion = pose.to_quaternion()
         seed = self.sample_random_configuration()
         sol = solver.get_ik(seed, pose.x, pose.y, pose.z, *quaternion)
