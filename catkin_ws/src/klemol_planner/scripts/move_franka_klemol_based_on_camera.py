@@ -51,7 +51,7 @@ class FrankaMotionController:
         self.lower_bounds, self.upper_bounds = self.ik_solver.get_joint_limits()
 
         # Load config paths
-        pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner")
+        pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner")
         xacro_path = f"{pkg_root}/panda_description/panda.urdf.xacro"
         urdf_string = subprocess.check_output(["xacro", xacro_path]).decode("utf-8")
         joint_limits_path = f"{pkg_root}/config/joint_limits.yaml"
@@ -173,7 +173,7 @@ class FrankaMotionController:
             point_above_object_in_base_frame,
             object_in_base_frame,
             point_above_object_in_base_frame,
-            # panda_transformations.transform_point(point_1, 'camera', 'base')
+            panda_transformations.transform_point(point_1, 'camera', 'base')
             # panda_transformations.transform_point(point_2, 'camera', 'base'),
             # panda_transformations.transform_point(point_3, 'camera', 'base'),
             # panda_transformations.transform_point(point_4, 'camera', 'base')
@@ -343,12 +343,30 @@ class FrankaMotionController:
 
         rospy.loginfo("Executing predefined movements using custom Trajectory Planner")
         for i,pos in enumerate(self.target_positions):
+            execute_linear = (i == 1) or (i == 2)
+            if execute_linear:
+                waypoints = []
+                target_pose = self.group.get_current_pose().pose
+                target_pose.position.x = pos[0]
+                target_pose.position.y = pos[1]
+                target_pose.position.z = pos[2]
+                waypoints.append(target_pose)
+
+                (plan, fraction) = self.group.compute_cartesian_path(
+                    waypoints, eef_step=0.01, jump_threshold=0.0
+                )
+
+                if fraction < 1.0:
+                    rospy.logwarn(f"Cartesian plan only achieved {fraction*100:.1f}% of path")
+                else:
+                    self.group.execute(plan, wait=True)
+                    continue  # skip rest of loop
+
+            # THIS IS CUSTOM PLANNER
             current_config = np.array(self.group.get_current_joint_values())
             self.custom_planner.set_start(current_config)
             self.custom_planner.set_goal(pos)
-
-            execute_linear = (i == 1) or (i == 2)
-            path, success = self.custom_planner.plan(linear_movement = execute_linear)
+            path, success = self.custom_planner.plan()
 
             # Call shortcutting function (edit path)
             path_shortcutter = PathShortcutter(self.collision_checker)
