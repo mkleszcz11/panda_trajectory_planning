@@ -72,7 +72,7 @@ class FrankaMotionController:
         # ]
 
         # Load config paths
-        pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner")
+        pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner")
         xacro_path = f"{pkg_root}/panda_description/panda.urdf.xacro"
         urdf_string = subprocess.check_output(["xacro", xacro_path]).decode("utf-8")
         joint_limits_path = f"{pkg_root}/config/joint_limits.yaml"
@@ -108,12 +108,12 @@ class FrankaMotionController:
         # point_4 = PointWithOrientation(0.0, 0.0, 1.0, 0.0, 0.0, -math.pi/4.0)
 
         table_corner_0 = PointWithOrientation(0.0, 0.0, 0.05, 0.0, math.pi, -math.pi)
-        point_1 = PointWithOrientation(0.0, 0.0, 0.9, 0.0, 0.0, -math.pi/4.0)
+        point_1 = PointWithOrientation(0.0, 0.0, 0.9, 0.0, 0.0, math.pi * 0.75)
 
         print("TRYING TO FIND A CUSTOM OBJECT")
         success, x, y, z = camera_operations.find_tennis()
         if success:
-            object_in_camera_frame = PointWithOrientation(x, y, z, 0.0, 0.0, -math.pi/4.0)
+            object_in_camera_frame = PointWithOrientation(x, y, z, 0.0, 0.0, math.pi * 0.75)
             object_in_base_frame = panda_transformations.transform_point(object_in_camera_frame, 'camera', 'base')
 
             print(f"X = {x} | Y = {y} | Z = {z}")
@@ -164,7 +164,7 @@ class FrankaMotionController:
 
         self.target_positions = [
             # panda_transformations.transform_point(table_corner_0, 'table', 'base'),
-            panda_transformations.transform_point(point_1, 'camera', 'base'),
+            # panda_transformations.transform_point(point_1, 'camera', 'base'),
             point_above_object_in_base_frame,
             object_in_base_frame,
             point_above_object_in_base_frame,
@@ -320,9 +320,9 @@ class FrankaMotionController:
         # for i, pos in enumerate(self.target_positions):
         #     print(f"Moving to position: {pos}, type: {type(pos)}")
         #     rospy.loginfo(f"Moving to position: {pos}")
-        #     if i == 4:
+        #     if i == 2:
         #         self.move_gripper(False)
-        #         rospy.sleep(1)
+        #         rospy.sleep(2)
         #     self.move_to_pose_planner(pos)
 
         ####################################
@@ -347,7 +347,7 @@ class FrankaMotionController:
             path_shortcutter = PathShortcutter(self.collision_checker)
             path = path_shortcutter.generate_a_shortcutted_path(path)
 
-            if i == 3:
+            if i == 2:
                 self.move_gripper(False)
                 rospy.sleep(2)
 

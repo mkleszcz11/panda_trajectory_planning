@@ -37,6 +37,7 @@ class RobotModel:
         self.base_link = base_link
         self.ee_link = ee_link
         self.hand_z_offset = 0.0
+        self.urdf_string = urdf_string
 
         # Load joint limits from YAML
         with open(joint_limits_path, 'r') as f:
@@ -45,7 +46,7 @@ class RobotModel:
             self.upper_bounds = np.array(data['joint_limits']['upper'])
 
         # Setup TRAC-IK
-        self.ik_solver = IK(self.base_link, self.ee_link, urdf_string=urdf_string)
+        self.ik_solver = IK(self.base_link, self.ee_link, urdf_string=self.urdf_string)
         self.num_joints = len(self.lower_bounds)
 
         # Initialize MoveIt Commander interface for FK
@@ -91,6 +92,12 @@ class RobotModel:
         quaternion = pose.to_quaternion()
         seed = self.sample_random_configuration()
         sol = self.ik_solver.get_ik(seed, pose.x, pose.y, pose.z, *quaternion)
+        return np.array(sol) if sol is not None else None
+    
+    def ik_with_custom_solver(self, pose: PointWithOrientation, solver: IK) -> t.Optional[np.ndarray]:
+        quaternion = pose.to_quaternion()
+        seed = self.sample_random_configuration()
+        sol = solver.get_ik(seed, pose.x, pose.y, pose.z, *quaternion)
         return np.array(sol) if sol is not None else None
 
     def fk(self, config: np.ndarray) -> t.Optional[PointWithOrientation]:
