@@ -431,10 +431,10 @@ class CameraOperations:
         print(f"Largest circle found at color coordinates: ({u_color}, {v_color}), radius={radius}")
 
         # Optional: Draw detected circle
-        # cv2.circle(color_image, (u_color, v_color), radius, (100, 255, 0), 3)
-        # cv2.circle(color_image, (u_color, v_color), 2, (0, 0, 255), 3) # Center point
-        # cv2.imshow("Detected Tennis Balls", color_image)
-        # cv2.waitKey(1)
+        cv2.circle(color_image, (u_color, v_color), radius, (100, 255, 0), 3)
+        cv2.circle(color_image, (u_color, v_color), 2, (0, 0, 255), 3) # Center point
+        cv2.imshow("Detected Tennis Balls", color_image)
+        cv2.waitKey(1)
 
         # --- 5. Calculate Average Depth around the Detected Center ---
         try:
