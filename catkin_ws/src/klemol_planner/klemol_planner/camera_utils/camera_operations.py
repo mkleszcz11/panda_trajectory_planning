@@ -315,11 +315,6 @@ class CameraOperations:
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-    import cv2
-    import numpy as np
-    import pyrealsense2 as rs  # Assuming this is used based on context
-    import math
-
 
     def find_tennis(self):
 
