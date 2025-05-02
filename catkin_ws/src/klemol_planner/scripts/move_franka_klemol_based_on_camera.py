@@ -25,6 +25,8 @@ import subprocess
 from klemol_planner.environment.robot_model import RobotModel
 from klemol_planner.environment.collision_checker import CollisionChecker
 from klemol_planner.planners.rrt import RRTPlanner
+from klemol_planner.planners.rrt_star import RRTStarPlanner
+from klemol_planner.planners.rrt_with_connecting import RRTWithConnectingPlanner
 from klemol_planner.utils.config_loader import load_planner_params
 
 import actionlib
@@ -48,6 +50,34 @@ class FrankaMotionController:
         self.ik_solver = IK("panda_link0", "panda_link8")
         self.lower_bounds, self.upper_bounds = self.ik_solver.get_joint_limits()
 
+        # Load config paths
+        pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner")
+        xacro_path = f"{pkg_root}/panda_description/panda.urdf.xacro"
+        urdf_string = subprocess.check_output(["xacro", xacro_path]).decode("utf-8")
+        joint_limits_path = f"{pkg_root}/config/joint_limits.yaml"
+
+        # RobotModel initialization
+        self.robot_model = RobotModel(
+            urdf_string=urdf_string,
+            base_link="panda_link0",
+            ee_link="panda_link8",
+            joint_limits_path=joint_limits_path
+        )
+
+        # Initialize robot model and collision checker
+        self.collision_checker = CollisionChecker(self.robot_model, group_name="panda_arm")
+
+        # Load RRT-specific parameters from config
+        rrt_params = load_planner_params("rrt")
+        rrt_star_params = load_planner_params("rrt_star")
+
+        # self.custom_planner = RRTPlanner(self.robot_model, self.collision_checker, rrt_params)
+        # self.custom_planner = RRTStarPlanner(self.robot_model, self.collision_checker, rrt_star_params)
+        self.custom_planner = RRTWithConnectingPlanner(self.robot_model, self.collision_checker, rrt_params)
+
+        # Storage for data comparison
+        self.data_log = []
+
         ##################################
         ######### CUSTOM STUFF ###########
         ##################################
@@ -70,31 +100,6 @@ class FrankaMotionController:
         #     panda_transformations.transform_point(point_3, 'camera', 'base')
         #     # panda_transformations.transform_point(point_4, 'camera', 'base')
         # ]
-
-        # Load config paths
-        pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner")
-        xacro_path = f"{pkg_root}/panda_description/panda.urdf.xacro"
-        urdf_string = subprocess.check_output(["xacro", xacro_path]).decode("utf-8")
-        joint_limits_path = f"{pkg_root}/config/joint_limits.yaml"
-
-        # RobotModel initialization
-        self.robot_model = RobotModel(
-            urdf_string=urdf_string,
-            base_link="panda_link0",
-            ee_link="panda_link8",
-            joint_limits_path=joint_limits_path
-        )
-
-        # Initialize robot model and collision checker
-        self.collision_checker = CollisionChecker(self.robot_model, group_name="panda_arm")
-
-        # Load RRT-specific parameters from config
-        rrt_params = load_planner_params("rrt")
-
-        # Initialize custom planner
-        self.custom_planner = RRTPlanner(self.robot_model, self.collision_checker, rrt_params)
-        # Storage for data comparison
-        self.data_log = []
 
         #####################################
         # WE WILL BE MOVING TO THESE POINTS #
@@ -126,7 +131,7 @@ class FrankaMotionController:
         point_above_object_in_base_frame = PointWithOrientation(
             object_in_base_frame.x,
             object_in_base_frame.y,
-            object_in_base_frame.z + 0.3,
+            object_in_base_frame.z + 0.12,
             object_in_base_frame.roll,
             object_in_base_frame.pitch,
             object_in_base_frame.yaw
@@ -168,7 +173,7 @@ class FrankaMotionController:
             point_above_object_in_base_frame,
             object_in_base_frame,
             point_above_object_in_base_frame,
-            panda_transformations.transform_point(point_1, 'camera', 'base')
+            # panda_transformations.transform_point(point_1, 'camera', 'base')
             # panda_transformations.transform_point(point_2, 'camera', 'base'),
             # panda_transformations.transform_point(point_3, 'camera', 'base'),
             # panda_transformations.transform_point(point_4, 'camera', 'base')
@@ -277,7 +282,7 @@ class FrankaMotionController:
             goal = GraspGoal()
             goal.width = 0.00     # fully closed
             goal.speed = 0.1
-            goal.force = 60.0     # closing force (adjust based on object)
+            goal.force = 40.0     # closing force (adjust based on object)
             goal.epsilon.inner = 0.005
             goal.epsilon.outer = 0.005
             client.send_goal(goal)
@@ -333,7 +338,7 @@ class FrankaMotionController:
 
         # Close gripper, wait 3s, open gripper
         self.move_gripper(False)
-        rospy.sleep(2)
+        # rospy.sleep(1)
         self.move_gripper(True)
 
         rospy.loginfo("Executing predefined movements using custom Trajectory Planner")
@@ -341,7 +346,9 @@ class FrankaMotionController:
             current_config = np.array(self.group.get_current_joint_values())
             self.custom_planner.set_start(current_config)
             self.custom_planner.set_goal(pos)
-            path, success = self.custom_planner.plan()
+
+            execute_linear = (i == 1) or (i == 2)
+            path, success = self.custom_planner.plan(linear_movement = execute_linear)
 
             # Call shortcutting function (edit path)
             path_shortcutter = PathShortcutter(self.collision_checker)
@@ -349,7 +356,7 @@ class FrankaMotionController:
 
             if i == 2:
                 self.move_gripper(False)
-                rospy.sleep(2)
+                # rospy.sleep(1)
 
             if success:
                 rospy.loginfo(f"RRT path found with {len(path)} waypoints.")
@@ -358,6 +365,7 @@ class FrankaMotionController:
             else:
                 rospy.logwarn("RRT planner failed to find a path.")
 
+        self.move_to_joint_config(self.start_joint_config)
         # # Save data for comparison
         # self.save_data()
         # rospy.loginfo("Execution complete.")

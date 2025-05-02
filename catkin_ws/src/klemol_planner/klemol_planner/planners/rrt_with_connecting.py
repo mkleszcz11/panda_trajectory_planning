@@ -43,7 +43,7 @@ class RRTWithConnectingPlanner(Planner):
         self.max_goal_samples: int = parameters.get("max_goal_samples", 5)
         self.goal_configs: t.List[np.ndarray] = []
 
-        weights = np.array([1.0, 1.0, 1.0, 0.5, 0.4, 0.3, 0.2])  # Example: penalise lower joints less
+        weights = np.array([0.5, 1.0, 0.75, 0.5, 0.05, 0.05, 0.05])  # Example: penalise lower joints less
         self.weights = weights#[::-1] # REVERSE THE WEIGHTS
 
     def plan(self) -> t.Tuple[t.List[np.ndarray], bool]:
@@ -167,6 +167,9 @@ class RRTWithConnectingPlanner(Planner):
 
         # Decide how many intermediate points to check based on step_size
         num_steps = int(np.ceil(distance / self.step_size))
+        print(f"Checking {num_steps} steps")
+        # TODO RISKY!
+        num_steps = int(np.ceil(num_steps) / 4)
         if num_steps == 0:
             return True  # The configurations are too close — no interpolation needed
 
@@ -179,9 +182,10 @@ class RRTWithConnectingPlanner(Planner):
             if not self.robot_model.is_within_limits(interp_config):
                 return False
 
-            # 2. Check if this configuration is collision-free
-            if self.collision_checker.is_in_collision(interp_config):
-                return False
+            # RISKY!
+            # # 2. Check if this configuration is collision-free
+            # if self.collision_checker.is_in_collision(interp_config):
+            #     return False
 
         return True  # All intermediate configurations are safe
 

@@ -19,7 +19,7 @@ class CameraOperations:
         Initialize the RealSense D435i camera and align depth to color stream.
         If no camera is present (USE_REALSENSE = False), fallback to hardcoded intrinsics.
         """
-        self.USE_REALSENSE = False  # Toggle to False if no camera is connected
+        self.USE_REALSENSE = True  # Toggle to False if no camera is connected
 
         if self.USE_REALSENSE:
             self.pipeline = rs.pipeline()
@@ -157,7 +157,7 @@ class CameraOperations:
         # cv2.imshow("ArUco Detection", color_image)
         # Show it in scale
         cv2.imshow("ArUco Detection", cv2.resize(color_image, (1280, 720)))
-        cv2.waitKey(1)
+        cv2.waitKey(0)
 
         return detected_markers
 
@@ -389,7 +389,7 @@ class CameraOperations:
             # Resize image to show it
             # img_resized = cv2.resize(color_image, (1280, 720))
             cv2.imshow("Detected Tennis Balls", color_image)
-            cv2.waitKey(1)
+            cv2.waitKey(0)
             cv2.destroyAllWindows()
 
             # Access the first ball's pixel coordinate
