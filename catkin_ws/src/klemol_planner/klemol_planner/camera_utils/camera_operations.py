@@ -320,31 +320,33 @@ class CameraOperations:
     import pyrealsense2 as rs  # Assuming this is used based on context
     import math
 
-    # --- Constants for find_tennis ---
-    # HSV range for tennis ball
-    LOWER_YELLOW = np.array([40, 100, 130])
-    UPPER_YELLOW = np.array([90, 255, 255])
-    # Morphological closing kernel
-    MORPH_KERNEL_SIZE = (5, 5)
-    # Minimum contour area (adjust radius as needed)
-    MIN_BALL_RADIUS_PX = 10
-    MIN_AREA = math.pi * MIN_BALL_RADIUS_PX ** 2
-    # Gaussian blur for Hough Circles
-    GAUSSIAN_KERNEL_SIZE = (9, 9)
-    GAUSSIAN_SIGMA = 2
-    # Hough Circle parameters
-    HOUGH_DP = 1.2
-    HOUGH_MIN_DIST = 30
-    HOUGH_PARAM1 = 50  # Canny edge high threshold
-    HOUGH_PARAM2 = 25  # Accumulator threshold (lower = more circles)
-    HOUGH_MIN_RADIUS = 30  # Expected ball size range in pixels
-    HOUGH_MAX_RADIUS = 50  # Expected ball size range in pixels
-    # Depth averaging offsets (relative to color pixel)
-    DEPTH_NEIGHBOR_OFFSETS = [(0, 0), (-1, 0), (1, 0), (0, -1), (0, 1)]
-    # Fallback value for coordinates on failure
-    FAIL_RETURN_VALUE = (False, 0.0, 0.0, 0.0)
 
     def find_tennis(self):
+
+        # --- Constants for find_tennis ---
+        # HSV range for tennis ball
+        LOWER_YELLOW = np.array([40, 100, 130])
+        UPPER_YELLOW = np.array([90, 255, 255])
+        # Morphological closing kernel
+        MORPH_KERNEL_SIZE = (5, 5)
+        # Minimum contour area (adjust radius as needed)
+        MIN_BALL_RADIUS_PX = 10
+        MIN_AREA = math.pi * MIN_BALL_RADIUS_PX ** 2
+        # Gaussian blur for Hough Circles
+        GAUSSIAN_KERNEL_SIZE = (9, 9)
+        GAUSSIAN_SIGMA = 2
+        # Hough Circle parameters
+        HOUGH_DP = 1.2
+        HOUGH_MIN_DIST = 30
+        HOUGH_PARAM1 = 50  # Canny edge high threshold
+        HOUGH_PARAM2 = 25  # Accumulator threshold (lower = more circles)
+        HOUGH_MIN_RADIUS = 30  # Expected ball size range in pixels
+        HOUGH_MAX_RADIUS = 50  # Expected ball size range in pixels
+        # Depth averaging offsets (relative to color pixel)
+        DEPTH_NEIGHBOR_OFFSETS = [(0, 0), (-1, 0), (1, 0), (0, -1), (0, 1)]
+        # Fallback value for coordinates on failure
+        FAIL_RETURN_VALUE = (False, 0.0, 0.0, 0.0)
+
         """
         Finds a tennis ball in the camera view and calculates its 3D position.
 
