@@ -105,24 +105,22 @@ class FrankaMotionController:
         # point_2 = PointWithOrientation(0.3, 0.3, 1.0, 0.0, 0.0, -math.pi/4.0)
         # point_3 = PointWithOrientation(-0.3, -0.3, 1.0, 0.0, 0.0, -math.pi/4.0)
         # point_4 = PointWithOrientation(0.0, 0.0, 1.0, 0.0, 0.0, -math.pi/4.0)
-
         table_corner_0 = PointWithOrientation(0.0, 0.0, 0.05, 0.0, math.pi, -math.pi)
-        point_1 = PointWithOrientation(0.0, 0.0, 0.9, 0.0, 0.0, -math.pi/4.0)
+        point_1 = PointWithOrientation(0.0, 0.0, 0.9, 0.0, 0.0, -math.pi / 4.0)
 
         print("TRYING TO FIND A CUSTOM OBJECT")
         success, x, y, z = camera_operations.find_tennis()
         if success:
-            point_2 = PointWithOrientation(x, y, z, 0.0, 0.0, -math.pi/4.0)
+            point_2 = PointWithOrientation(x, y, z, 0.0, 0.0, -math.pi / 4.0)
 
             print(f"X = {x} | Y = {y} | Z = {z}")
-            point_above_point2 = PointWithOrientation(x, y, z - 0.1, 0.0, 0.0, -math.pi/4.0)
+            point_above_point2 = PointWithOrientation(x, y, z - 0.1, 0.0, 0.0, -math.pi / 4.0)
         else:
             point_2 = point_1
         print("OBJECT DETECTION DONE")
 
-
         transformed_p2 = panda_transformations.transform_point(point_2, 'camera', 'base')
-        #
+
         # Get all marker transforms in camera frame
         marker_transforms = camera_operations.get_marker_transforms()
 
@@ -147,22 +145,45 @@ class FrankaMotionController:
             # Store for visualization
             visualisation_frames[f"{corner_name}_in_camera_frame"] = corner_base.as_matrix()
 
-        # Optional: add any extra objects (e.g. a detected tennis ball)
+        # Process box markers (10 and 11)
+        # Default to point_1 if not detected
+        point_box_1 = panda_transformations.transform_point(point_1, 'camera', 'base')
+        point_box_2 = panda_transformations.transform_point(point_1, 'camera', 'base')
+
+        # Check for marker 10 (box_1)
+        if "marker_10" in marker_transforms:
+            x, y, z = marker_transforms["marker_10"][:3, 3]
+            box_cam = PointWithOrientation(x, y, z, 0.0, 0.0, 0.0)
+            point_box_1 = panda_transformations.transform_point(box_cam, 'camera', 'base')
+            visualisation_frames["box_1_in_camera_frame"] = point_box_1.as_matrix()
+        else:
+            print("[WARN] marker_10 (box_1) not detected. Using point_1 instead.")
+
+        # Check for marker 11 (box_2)
+        if "marker_11" in marker_transforms:
+            x, y, z = marker_transforms["marker_11"][:3, 3]
+            box_cam = PointWithOrientation(x, y, z, 0.0, 0.0, 0.0)
+            point_box_2 = panda_transformations.transform_point(box_cam, 'camera', 'base')
+            visualisation_frames["box_2_in_camera_frame"] = point_box_2.as_matrix()
+        else:
+            print("[WARN] marker_11 (box_2) not detected. Using point_1 instead.")
+
+        # Add tennis ball to visualization
         visualisation_frames["tennis"] = transformed_p2.as_matrix()
 
         # Visualise
         panda_transformations.visusalise_environment(visualisation_frames)
 
+        # Define target positions including boxes
         self.target_positions = [
             panda_transformations.transform_point(table_corner_0, 'table', 'base'),
             panda_transformations.transform_point(point_1, 'camera', 'base'),
             panda_transformations.transform_point(point_above_point2, 'camera', 'base'),
             panda_transformations.transform_point(point_2, 'camera', 'base'),
             panda_transformations.transform_point(point_above_point2, 'camera', 'base'),
-            panda_transformations.transform_point(point_1, 'camera', 'base')
-            # panda_transformations.transform_point(point_2, 'camera', 'base'),
-            # panda_transformations.transform_point(point_3, 'camera', 'base'),
-            # panda_transformations.transform_point(point_4, 'camera', 'base')
+            panda_transformations.transform_point(point_1, 'camera', 'base'),
+            point_box_1,
+            point_box_2
         ]
 
     def move_to_joint_config(self, joint_config):
