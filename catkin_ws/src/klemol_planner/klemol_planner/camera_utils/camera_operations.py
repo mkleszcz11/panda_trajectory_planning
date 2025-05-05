@@ -139,6 +139,12 @@ class CameraOperations:
             cv2.drawFrameAxes(color_image, self.camera_matrix, self.dist_coeffs, rvec, tvec, 0.1)
             cv2.putText(color_image, f"ID: {marker_id}", (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
+            # Add Box labels for markers 10 and 11
+            if marker_id == 10:
+                cv2.putText(color_image, "Box 1", (cx, cy + 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+            elif marker_id == 11:
+                cv2.putText(color_image, "Box 2", (cx, cy + 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+
         # Put green dot and crosshairs at the center of the image
         width = color_image.shape[1]
         height = color_image.shape[0]
