@@ -136,7 +136,7 @@ class CameraOperations:
             detected_markers.append((marker_id, tvec.flatten(), rvec.flatten()))
 
             # Visualization
-            cv2.drawFrameAxes(color_image, self.camera_matrix, self.dist_coeffs, rvec, tvec, 0.23)
+            cv2.drawFrameAxes(color_image, self.camera_matrix, self.dist_coeffs, rvec, tvec, 0.1)
             cv2.putText(color_image, f"ID: {marker_id}", (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
         # Put green dot and crosshairs at the center of the image
