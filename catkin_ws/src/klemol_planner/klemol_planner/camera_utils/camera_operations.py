@@ -19,7 +19,7 @@ class CameraOperations:
         Initialize the RealSense D435i camera and align depth to color stream.
         If no camera is present (USE_REALSENSE = False), fallback to hardcoded intrinsics.
         """
-        self.USE_REALSENSE = False  # Toggle to False if no camera is connected
+        self.USE_REALSENSE = True  # Toggle to False if no camera is connected
 
         if self.USE_REALSENSE:
             self.pipeline = rs.pipeline()
@@ -121,16 +121,6 @@ class CameraOperations:
             cy = int(corner[0][:, 1].mean())
 
             marker_id = int(ids[i][0])
-            cv2.putText(
-                color_image,
-                f"ID: {marker_id}",
-                (cx + 10, cy - 10),  # slightly offset from the center
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,                # font scale
-                (0, 255, 0),        # green text
-                2,                  # thickness
-                cv2.LINE_AA
-            )
 
             if self.USE_REALSENSE:
                 z_depth = depth_frame.get_distance(cx, cy)
@@ -147,12 +137,16 @@ class CameraOperations:
 
             # Visualization
             cv2.drawFrameAxes(color_image, self.camera_matrix, self.dist_coeffs, rvec, tvec, 0.23)
-            cv2.putText(color_image, f"ID: {marker_id}", (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            cv2.putText(color_image, f"ID: {marker_id}", (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
-        # Put green dot at the center of the image
+        # Put green dot and crosshairs at the center of the image
         width = color_image.shape[1]
         height = color_image.shape[0]
         cv2.circle(color_image, (width//2, height//2), 5, (0, 255, 0), -1)
+
+        cv2.drawMarker(color_image, (width//2, height//2), color=(0, 255, 0), thickness=5,
+                       markerType=cv2.MARKER_CROSS, line_type=cv2.LINE_AA,
+                       markerSize=50)
 
         # cv2.imshow("ArUco Detection", color_image)
         # Show it in scale
@@ -315,220 +309,204 @@ class CameraOperations:
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
+    import cv2
+    import numpy as np
+    import pyrealsense2 as rs  # Assuming this is used based on context
+    import math
 
-    def find_tennis(self):
+    # Assume this function is part of a class where 'self' is valid
+    # and contains necessary attributes like self.pipeline, self.get_image,
+    # self.convert_depth_to_phys_coord_using_realsense
 
-        # --- Constants for find_tennis ---
-        # HSV range for tennis ball
-        LOWER_YELLOW = np.array([40, 100, 130])
-        UPPER_YELLOW = np.array([90, 255, 255])
-        # Morphological closing kernel
-        MORPH_KERNEL_SIZE = (5, 5)
-        # Minimum contour area (adjust radius as needed)
-        MIN_BALL_RADIUS_PX = 10
-        MIN_AREA = math.pi * MIN_BALL_RADIUS_PX ** 2
-        # Gaussian blur for Hough Circles
-        GAUSSIAN_KERNEL_SIZE = (9, 9)
-        GAUSSIAN_SIGMA = 2
-        # Hough Circle parameters
-        HOUGH_DP = 1.2
-        HOUGH_MIN_DIST = 30
-        HOUGH_PARAM1 = 50  # Canny edge high threshold
-        HOUGH_PARAM2 = 25  # Accumulator threshold (lower = more circles)
-        HOUGH_MIN_RADIUS = 30  # Expected ball size range in pixels
-        HOUGH_MAX_RADIUS = 50  # Expected ball size range in pixels
-        # Depth averaging offsets (relative to color pixel)
-        DEPTH_NEIGHBOR_OFFSETS = [(0, 0), (-1, 0), (1, 0), (0, -1), (0, 1)]
-        # Fallback value for coordinates on failure
-        FAIL_RETURN_VALUE = (False, 0.0, 0.0, 0.0)
+    """def find_tennis(self):
 
-        """
-        Finds a tennis ball in the camera view and calculates its 3D position.
+        # Assuming get_image returns color image (numpy) and depth frame (rs.depth_frame)
+        color_image, depth_frame = self.get_image()  # Use depth_frame for clarity
+        if color_image is None or depth_frame is None:
+            print("Failed to get frames.")
+            return False, 0, 0, 0
 
-        Uses color filtering and Hough Circles to detect the ball in the color image.
-        Calculates depth by averaging readings from the center pixel and its four
-        neighbors (in color space) after mapping them to the depth frame.
-        Converts the center pixel coordinates and average depth to real-world
-        coordinates using camera intrinsics.
-
-        Returns:
-            Tuple[bool, float, float, float]: A tuple containing:
-                - bool: True if a ball was successfully found and located, False otherwise.
-                - float: X coordinate in meters (camera frame).
-                - float: Y coordinate in meters (camera frame).
-                - float: Z coordinate (depth) in meters (camera frame).
-                Returns (False, 0.0, 0.0, 0.0) on failure.
-        """
-
-        # --- 1. Get Frames ---
-        try:
-            color_image, depth_frame = self.get_image()
-            if color_image is None or depth_frame is None:
-                print("Warning: Failed to get valid frames.")
-                return FAIL_RETURN_VALUE
-            # Basic check if depth_frame seems valid (has expected methods)
-            _ = depth_frame.get_width()
-            _ = depth_frame.get_distance(0, 0)
-        except AttributeError:
-            print("Error: 'depth_frame' object invalid or missing methods (get_width/get_distance).")
-            return FAIL_RETURN_VALUE
-        except Exception as e:
-            print(f"Error during frame acquisition: {e}")
-            return FAIL_RETURN_VALUE
-
-        # --- 2. Image Processing for Ball Detection ---
         gray = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
-        gray = cv2.medianBlur(gray, 5)  # Noise reduction
+        gray = cv2.medianBlur(gray, 5)
 
+        # Convert to HSV for color-based filtering
         hsv = cv2.cvtColor(color_image, cv2.COLOR_BGR2HSV)
-        mask = cv2.inRange(hsv, LOWER_YELLOW, UPPER_YELLOW)
 
-        kernel = np.ones(MORPH_KERNEL_SIZE, np.uint8)
-        mask_closed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)  # Fill small holes
+        # Define HSV range for the green/yellow ball
+        lower_yellow = np.array([40, 100, 130])  # Lower bound
+        upper_yellow = np.array([90, 255, 255])  # Upper bound
 
-        # Filter contours by area
+        # Create a binary mask
+        mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
+
+        # Apply morphological closing (dilate -> erode) to fill holes
+        kernel = np.ones((5, 5), np.uint8)  # Adjust kernel size as needed
+        mask_closed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+
+        # Resize mask to show it
+        # mask_resized = cv2.resize(mask_closed, (1920, 1080))
+        # cv2.imshow("Mask", mask_resized)
+        # cv2.imshow("Mask", mask_closed) # Keep original comment status
+        # cv2.waitKey(0)
+
         contours, _ = cv2.findContours(mask_closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        valid_contours = [cnt for cnt in contours if cv2.contourArea(cnt) >= MIN_AREA]
-
-        if not valid_contours:
-            print("No contours found with sufficient area.")
-            # cv2.imshow("Mask", mask_closed) # Optional debug display
-            # cv2.waitKey(1)
-            return FAIL_RETURN_VALUE
-
-        # Create a clean mask with only large enough contours for Hough input
         clean_mask = np.zeros_like(mask_closed)
-        cv2.drawContours(clean_mask, valid_contours, -1, 255, thickness=cv2.FILLED)
 
-        # Prepare mask for Hough Circles
-        blurred_mask = cv2.GaussianBlur(clean_mask, GAUSSIAN_KERNEL_SIZE, GAUSSIAN_SIGMA)
+        min_area = math.pi * 10 * 10
 
-        # --- 3. Detect Circles using Hough Transform ---
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            if area >= min_area:
+                cv2.drawContours(clean_mask, [cnt], -1, 255, thickness=cv2.FILLED)
+
+        # Apply bitwise AND to isolate the green/yellow parts of the image
+        # color_filtered = cv2.bitwise_and(gray, gray, mask=clean_mask) # Keep original comment status
+
+        # Apply Gaussian blur to the binary image to create edge gradients
+        blurred = cv2.GaussianBlur(clean_mask, (9, 9), 2)
+
+        # cv2.imshow("Filtered", blurred) # Keep original comment status
+        # cv2.waitKey(0)
+
+        # Apply Hough Circle Transform on the blurred mask
         circles = cv2.HoughCircles(
-            blurred_mask,
+            blurred,
             cv2.HOUGH_GRADIENT,
-            dp=HOUGH_DP,
-            minDist=HOUGH_MIN_DIST,
-            param1=HOUGH_PARAM1,
-            param2=HOUGH_PARAM2,
-            minRadius=HOUGH_MIN_RADIUS,
-            maxRadius=HOUGH_MAX_RADIUS
+            dp=1.2,
+            minDist=30,
+            param1=50,  # Higher threshold for Canny edge detector
+            param2=25,  # Lower this to detect more circles (sensitivity)
+            minRadius=30,  # Adjusted based on your mask
+            maxRadius=50
         )
 
-        if circles is None or len(circles[0]) == 0:
-            print("No circles detected.")
-            # cv2.imshow("Mask", mask_closed) # Optional debug display
-            # cv2.imshow("Blurred Mask", blurred_mask) # Optional debug display
-            # cv2.waitKey(1)
-            return FAIL_RETURN_VALUE
+        if circles is not None:
+            circles = np.uint16(np.around(circles))  # Round the values
+            largest_circle = max(circles[0, :], key=lambda c: c[2])
+            x, y, r = largest_circle
+            print(f"Largest circle: center=({x}, {y}), radius={r}")
 
-        # --- 4. Select Target Circle (Largest Radius) ---
-        # circles is [[[x, y, r], [x, y, r], ...]]
-        circles = np.uint16(np.around(circles[0, :]))  # Use only the first dimension
-        # Sort by radius (descending) and take the first one
-        largest_circle = sorted(circles, key=lambda c: c[2], reverse=True)[0]
-        u_color, v_color, radius = largest_circle  # Center coordinates in COLOR frame
-        print(f"Largest circle found at color coordinates: ({u_color}, {v_color}), radius={radius}")
+            # Draw the circle
+            cv2.circle(color_image, (x, y), r, (100, 255, 0), 3)
+            # Draw the circle's center
+            cv2.circle(color_image, (x, y), 2, (0, 0, 255), 3)
 
-        # Optional: Draw detected circle
-        cv2.circle(color_image, (u_color, v_color), radius, (100, 255, 0), 3)
-        cv2.circle(color_image, (u_color, v_color), 2, (0, 0, 255), 3) # Center point
-        cv2.imshow("Detected Tennis Balls", color_image)
-        cv2.waitKey(1)
+            # Display the original image with detected circles
+            # Resize image to show it
+            # img_resized = cv2.resize(color_image, (1280, 720))
+            # cv2.imshow("Detected Tennis Balls", color_image) # Keep original comment status
+            # cv2.waitKey(1) # Keep original comment status
+            # cv2.destroyAllWindows() # Keep original comment status
 
-        # --- 5. Calculate Average Depth around the Detected Center ---
-        try:
-            depth_height, depth_width = depth_frame.get_height(), depth_frame.get_width()
+            # Access the first ball's pixel coordinate (in color frame)
+            u, v = x, y
+
+            # Get dimensions of the depth frame
+            depth_width = depth_frame.get_width()
+            depth_height = depth_frame.get_height()
+            print(f"Depth frame dimensions: {depth_width} x {depth_height}")
+
+            # Get dimensions of the color frame
             color_height, color_width = color_image.shape[:2]
-        except Exception as e:
-            print(f"Error getting frame dimensions for depth calculation: {e}")
-            return FAIL_RETURN_VALUE
+            print(f"Color frame dimensions: {color_width} x {color_height}")
 
-        print(f"Depth frame: {depth_width}x{depth_height}, Color frame: {color_width}x{color_height}")
+            # --- START: MODIFIED DEPTH CALCULATION ---
 
-        # Scaling factors for coordinate mapping (Color -> Depth)
-        scale_x = depth_width / color_width
-        scale_y = depth_height / color_height
+            # Calculate scaling factors (Color -> Depth)
+            scale_x = depth_width / color_width
+            scale_y = depth_height / color_height
 
-        depth_readings = []  # Store valid depth readings from neighbors
+            # Calculate rescaled center coordinates (needed for final conversion)
+            u_rescaled = int(u * scale_x)
+            v_rescaled = int(v * scale_y)
+            print(f"Rescaled pixel coordinate of ball center: ({u_rescaled}, {v_rescaled})")
 
-        for dx, dy in DEPTH_NEIGHBOR_OFFSETS:
-            # 1. Calculate neighbor coordinate in the COLOR frame
-            neighbor_u_color = u_color + dx
-            neighbor_v_color = v_color + dy
+            # Average depth calculation based on neighbors in COLOR frame
+            depth_sum = 0.0
+            valid_readings = 0
+            offsets = [(0, 0), (-1, 0), (1, 0), (0, -1), (0, 1)]
 
-            # Skip if neighbor is outside color frame bounds
-            if not (0 <= neighbor_u_color < color_width and 0 <= neighbor_v_color < color_height):
-                continue
+            for dx, dy in offsets:
+                # Neighbor coordinates in COLOR frame
+                neighbor_u_color = u + dx
+                neighbor_v_color = v + dy
 
-            # 2. Rescale this neighbor coordinate to the DEPTH frame
-            depth_u = int(neighbor_u_color * scale_x)
-            depth_v = int(neighbor_v_color * scale_y)
+                # Optional: Check if neighbor is within color frame bounds
+                if not (0 <= neighbor_u_color < color_width and 0 <= neighbor_v_color < color_height):
+                    continue  # Skip if outside color frame
 
-            # 3. Check bounds in DEPTH frame and get depth
-            if 0 <= depth_u < depth_width and 0 <= depth_v < depth_height:
-                try:
-                    depth_at_pixel = depth_frame.get_distance(depth_u, depth_v)
-                    # 4. Validate depth reading (RealSense returns 0 for invalid)
-                    if depth_at_pixel > 0.0:
-                        depth_readings.append(depth_at_pixel)
-                except Exception as e:
-                    # Log error but continue checking other points
-                    print(f"  Warning: Error getting depth at D({depth_u}, {depth_v}): {e}")
+                # Rescale neighbor coordinates to DEPTH frame
+                check_u_depth = int(neighbor_u_color * scale_x)
+                check_v_depth = int(neighbor_v_color * scale_y)
 
-        # Calculate average depth
-        if not depth_readings:
-            print("Warning: No valid depth readings found for the 5 points. Cannot calculate position.")
-            return FAIL_RETURN_VALUE
+                # Check if rescaled coordinates are within DEPTH frame bounds
+                if 0 <= check_u_depth < depth_width and 0 <= check_v_depth < depth_height:
+                    try:
+                        # Get depth at the rescaled neighbor coordinate
+                        d = depth_frame.get_distance(check_u_depth, check_v_depth)
+                        if d > 0.0:  # Check for valid depth reading
+                            depth_sum += d
+                            valid_readings += 1
+                            # print(f"  Depth at C({neighbor_u_color},{neighbor_v_color}) -> D({check_u_depth},{check_v_depth}): {d:.3f}m") # Debug
+                    except Exception as e:
+                        print(f"  Warning: Error getting depth at D({check_u_depth}, {check_v_depth}): {e}")
 
-        average_depth = sum(depth_readings) / len(depth_readings)
-        print(f"Average depth from {len(depth_readings)} points: {average_depth:.3f} m")
-
-        # --- 6. Get Camera Intrinsics (Depth Sensor) ---
-        # Note: Consider loading intrinsics once during initialization if they are static.
-        if not hasattr(self, 'depth_intrinsics') or self.depth_intrinsics is None:
-            try:
-                print("Loading depth intrinsics...")
-                profile = self.pipeline.get_active_profile()
-                depth_stream = profile.get_stream(rs.stream.depth).as_video_stream_profile()
-                self.depth_intrinsics = depth_stream.get_intrinsics()  # Store the intrinsics object
-                # Store matrix/coeffs separately ONLY if needed by the conversion function
-                intr = self.depth_intrinsics
-                self.camera_matrix = np.array([[intr.fx, 0, intr.ppx], [0, intr.fy, intr.ppy], [0, 0, 1]])
-                self.dist_coeffs = np.array(intr.coeffs)  # Usually [0,0,0,0,0] for depth
-
-            except Exception as e:
-                print(f"Error getting camera intrinsics: {e}")
-                return FAIL_RETURN_VALUE
-
-        # --- 7. Convert to Real-World Coordinates ---
-        # Rescaled CENTER coordinates needed for deprojection location
-        u_depth_center = int(u_color * scale_x)
-        v_depth_center = int(v_color * scale_y)
-
-        try:
-            # Use the rescaled CENTER pixel location and the AVERAGE depth
-            # Ensure your conversion function uses DEPTH intrinsics if using rs.deproject...
-            world_coords = self.convert_depth_to_phys_coord_using_realsense(
-                u_depth_center, v_depth_center, average_depth,
-                self.camera_matrix, self.dist_coeffs,  # Pass matrix/coeffs if needed by your func
-                self.depth_intrinsics.width, self.depth_intrinsics.height  # Pass intrinsic dimensions
-                # Or potentially pass self.depth_intrinsics directly if your function uses it
-            )
-
-            # Validate the result (should be a list/tuple of 3 floats)
-            if world_coords and len(world_coords) == 3:
-                print(f"Real-world coordinates (X,Y,Z meters): {world_coords}")
-                return True, float(world_coords[0]), float(world_coords[1]), float(world_coords[2])
+            # Calculate the average depth
+            if valid_readings > 0:
+                average_depth_value = depth_sum / valid_readings
+                print(f"Average depth from {valid_readings} points: {average_depth_value:.3f} m")
             else:
-                print(f"Warning: Coordinate conversion failed or returned invalid format: {world_coords}")
-                return FAIL_RETURN_VALUE
+                average_depth_value = 0.0  # Fallback if no valid readings
+                print("Warning: No valid depth readings found for 5 points. Using 0.0m depth.")
+                # As an alternative fallback, could try the original center depth:
+                # try:
+                #     average_depth_value = depth_frame.get_distance(u_rescaled, v_rescaled)
+                #     print(f"Warning: Using original center depth: {average_depth_value:.3f} m")
+                # except:
+                #     average_depth_value = 0.0 # Still fallback to 0 if center fails too
+                #     print("Warning: Center depth also invalid. Using 0.0m.")
 
-        except Exception as e:
-            print(f"Error during coordinate conversion: {e}")
-            return FAIL_RETURN_VALUE
+            # Use the calculated average depth for the final result
+            depth_value = average_depth_value
 
-    """
+            # --- END: MODIFIED DEPTH CALCULATION ---
+
+            # Original single-point depth calculation (now replaced by average above)
+            # depth_value = depth_frame.get_distance(u_rescaled, v_rescaled)
+            # print(f"Depth at ball center (meters): {depth_value}")
+
+            # Load camera intrinsics from RealSense
+            profile = self.pipeline.get_active_profile()
+            color_stream = profile.get_stream(rs.stream.color).as_video_stream_profile()
+            intrinsics = color_stream.get_intrinsics()
+            self.camera_matrix = np.array([
+                [intrinsics.fx, 0, intrinsics.ppx],
+                [0, intrinsics.fy, intrinsics.ppy],
+                [0, 0, 1]
+            ])
+            self.dist_coeffs = np.array(intrinsics.coeffs)
+
+            # Using color dimensions based on original code's use of color intrinsics
+            width = color_width
+            height = color_height
+
+            # Call conversion function with RESCALED CENTER coordinates and AVERAGE depth
+            result = self.convert_depth_to_phys_coord_using_realsense(u_rescaled, v_rescaled, depth_value,
+                                                                      self.camera_matrix,
+                                                                      self.dist_coeffs, width, height)
+
+            # Check result validity before returning
+            if result and len(result) == 3 and average_depth_value > 0:  # Check average depth was valid
+                print(f"Real-world coordinates of ball center (meters): {result}")
+                return True, result[0], result[1], result[2]
+            else:
+                print(f"Failed to get valid real-world coordinates (average depth was {average_depth_value:.3f}).")
+                return False, 0, 0, 0
+        else:
+            print("No circles detected.")
+            return False, 0, 0, 0"""
+
+
     def find_tennis(self):
 
         color_image, depth = self.get_image()
@@ -653,7 +631,8 @@ class CameraOperations:
         else:
             print("No circles detected.")
             return False, 0, 0, 0
-    """
+
+
 
     def convert_depth_to_phys_coord_using_realsense(self, x, y, depth, camera_matrix, dist_coeffs, width, height):
         """
@@ -723,4 +702,6 @@ class CameraOperations:
 
 if __name__ == "__main__":
     cam = CameraOperations()
-    cam.show_rgb_and_depth()
+    #cam.show_rgb_and_depth()
+    cam.find_aruco_codes_in_the_image()
+    #cam.find_tennis()
