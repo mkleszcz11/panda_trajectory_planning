@@ -103,30 +103,21 @@ class FrankaMotionController:
         # point_3 = PointWithOrientation(-0.3, -0.3, 1.0, 0.0, 0.0, -math.pi/4.0)
         # point_4 = PointWithOrientation(0.0, 0.0, 1.0, 0.0, 0.0, -math.pi/4.0)
         table_corner_0 = PointWithOrientation(0.0, 0.0, 0.05, 0.0, math.pi, -math.pi)
-<<<<<<< HEAD
         point_1 = PointWithOrientation(0.0, 0.0, 0.9, 0.0, 0.0, -math.pi / 4.0)
-=======
         point_1 = PointWithOrientation(0.0, 0.0, 0.9, 0.0, 0.0, math.pi * 0.75)
->>>>>>> temp
 
         print("TRYING TO FIND A CUSTOM OBJECT")
+        print(F"DEBUG DEBUG DEBUG ----->>>>> {camera_operations.USE_REALSENSE}")
         if camera_operations.USE_REALSENSE:
             success, x, y, z = camera_operations.find_tennis()
         else:
             success = True
             x, y, z = 0.01, 0.01, 1.0
         if success:
-<<<<<<< HEAD
-            point_2 = PointWithOrientation(x, y, z, 0.0, 0.0, -math.pi / 4.0)
-
-            print(f"X = {x} | Y = {y} | Z = {z}")
-            point_above_point2 = PointWithOrientation(x, y, z - 0.1, 0.0, 0.0, -math.pi / 4.0)
-=======
             object_in_camera_frame = PointWithOrientation(x, y, z, 0.0, 0.0, math.pi * 0.75)
             object_in_base_frame = panda_transformations.transform_point(object_in_camera_frame, 'camera', 'base')
 
             print(f"X = {x} | Y = {y} | Z = {z}")
->>>>>>> temp
         else:
             object_in_camera_frame = point_1
             print("NO OBJECT DETECTED")
@@ -142,11 +133,6 @@ class FrankaMotionController:
             object_in_base_frame.yaw
         )
 
-<<<<<<< HEAD
-        transformed_p2 = panda_transformations.transform_point(point_2, 'camera', 'base')
-
-=======
->>>>>>> temp
         # Get all marker transforms in camera frame
         marker_transforms = camera_operations.get_marker_transforms()
 
@@ -171,7 +157,6 @@ class FrankaMotionController:
             # Store for visualization
             visualisation_frames[f"{corner_name}_in_camera_frame"] = corner_base.as_matrix()
 
-<<<<<<< HEAD
         # Process box markers (10 and 11)
         # Default to point_1 if not detected
         point_box_1 = panda_transformations.transform_point(point_1, 'camera', 'base')
@@ -196,37 +181,20 @@ class FrankaMotionController:
             print("[WARN] marker_11 (box_2) not detected. Using point_1 instead.")
 
         # Add tennis ball to visualization
-        visualisation_frames["tennis"] = transformed_p2.as_matrix()
-=======
-        # Optional: add any extra objects (e.g. a detected tennis ball)
         visualisation_frames["tennis"] = object_in_base_frame.as_matrix()
->>>>>>> temp
 
         # Visualise
         # panda_transformations.visusalise_environment(visualisation_frames)
 
         # Define target positions including boxes
         self.target_positions = [
-<<<<<<< HEAD
-            panda_transformations.transform_point(table_corner_0, 'table', 'base'),
-            panda_transformations.transform_point(point_1, 'camera', 'base'),
-            panda_transformations.transform_point(point_above_point2, 'camera', 'base'),
-            panda_transformations.transform_point(point_2, 'camera', 'base'),
-            panda_transformations.transform_point(point_above_point2, 'camera', 'base'),
-            panda_transformations.transform_point(point_1, 'camera', 'base'),
-            point_box_1,
-            point_box_2
-=======
             # panda_transformations.transform_point(table_corner_0, 'table', 'base'),
-            # panda_transformations.transform_point(point_1, 'camera', 'base'),
             point_above_object_in_base_frame,
             object_in_base_frame,
             point_above_object_in_base_frame,
-            panda_transformations.transform_point(point_1, 'camera', 'base')
-            # panda_transformations.transform_point(point_2, 'camera', 'base'),
-            # panda_transformations.transform_point(point_3, 'camera', 'base'),
-            # panda_transformations.transform_point(point_4, 'camera', 'base')
->>>>>>> temp
+            panda_transformations.transform_point(point_1, 'camera', 'base'),
+            point_box_1,
+            point_box_2
         ]
 
     def move_to_joint_config(self, joint_config):
@@ -318,6 +286,11 @@ class FrankaMotionController:
         rospy.loginfo(f"Data saved to {filename}")
 
     def move_gripper(self, open_gripper: bool):
+        """
+        Open or close the gripper
+        Args:
+            open_gripper: True to open, False to close
+        """
         if open_gripper:
             print(f"OPENING GRIPPER")
             client = actionlib.SimpleActionClient('/franka_gripper/move', MoveAction)
@@ -356,7 +329,7 @@ class FrankaMotionController:
         ####################
         ##### TRACK IK #####
         ####################
-        # Move to fixed starting joint configuration before each method
+        # # # Move to fixed starting joint configuration before each method
         # rospy.loginfo("Moving to Start Joint Configuration before TRAC-IK execution")
         # self.move_to_joint_config(self.start_joint_config)
 
@@ -385,81 +358,26 @@ class FrankaMotionController:
         # self.move_gripper(True)
 
         # for i, pos in enumerate(self.target_positions):
-        #     if i == 2:
-        #         self.move_gripper(False)
-        #         rospy.sleep(2)
-
-        #     execute_linear = (i == 1) or (i == 2)
-        #     if execute_linear:
-        #         waypoints = []
-        #         target_pose = self.group.get_current_pose().pose
-        #         target_pose.position.x = pos.x
-        #         target_pose.position.y = pos.y
-        #         target_pose.position.z = pos.z
-        #         waypoints.append(target_pose)
-
-        #         (plan, fraction) = self.group.compute_cartesian_path(waypoints, 0.01, True)
-
-        #         if fraction < 1.0:
-        #             rospy.logwarn(f"Cartesian plan only achieved {fraction*100:.1f}% of path")
-        #         else:
-        #             # Retiming for ROS Noetic
-        #             retimed_plan = self.group.retime_trajectory(
-        #                 self.robot.get_current_state(),
-        #                 plan,
-        #                 velocity_scaling_factor=0.2,
-        #                 acceleration_scaling_factor=0.2
-        #             )
-        #             self.group.execute(retimed_plan, wait=True)
-        #             continue
-
         #     print(f"Moving to position: {pos}, type: {type(pos)}")
         #     rospy.loginfo(f"Moving to position: {pos}")
-
+        #     if i == 4:
+        #         self.move_gripper(False)
+        #         rospy.sleep(1)
         #     self.move_to_pose_planner(pos)
 
         ####################################
         #### CUSTOM TRAJECTORY PLANNER #####
         ####################################
         rospy.loginfo("Returning to Start Joint Configuration after execution")
+        self.move_to_joint_config(self.start_joint_config)
 
         # Close gripper, wait 3s, open gripper
         self.move_gripper(False)
-        rospy.sleep(1)
+        rospy.sleep(2)
         self.move_gripper(True)
-        rospy.sleep(1)
 
         rospy.loginfo("Executing predefined movements using custom Trajectory Planner")
         for i,pos in enumerate(self.target_positions):
-            if i == 2:
-                self.move_gripper(False)
-                rospy.sleep(1)
-
-            execute_linear = (i == 1) or (i == 2)
-            if execute_linear:
-                waypoints = []
-                target_pose = self.group.get_current_pose().pose
-                target_pose.position.x = pos.x
-                target_pose.position.y = pos.y
-                target_pose.position.z = pos.z
-                waypoints.append(target_pose)
-
-                (plan, fraction) = self.group.compute_cartesian_path(waypoints, 0.01, True)
-
-                if fraction < 1.0:
-                    rospy.logwarn(f"Cartesian plan only achieved {fraction*100:.1f}% of path")
-                else:
-                    # Retiming for ROS Noetic
-                    retimed_plan = self.group.retime_trajectory(
-                        self.robot.get_current_state(),
-                        plan,
-                        velocity_scaling_factor=0.2,
-                        acceleration_scaling_factor=0.2
-                    )
-                    self.group.execute(retimed_plan, wait=True)
-                    continue
-
-            # THIS IS CUSTOM PLANNER
             current_config = np.array(self.group.get_current_joint_values())
             self.custom_planner.set_start(current_config)
             self.custom_planner.set_goal(pos)
@@ -468,6 +386,10 @@ class FrankaMotionController:
             # Call shortcutting function (edit path)
             path_shortcutter = PathShortcutter(self.collision_checker)
             path = path_shortcutter.generate_a_shortcutted_path(path)
+
+            if i == 3:
+                self.move_gripper(False)
+                rospy.sleep(2)
 
             if success:
                 rospy.loginfo(f"RRT path found with {len(path)} waypoints.")

@@ -27,27 +27,27 @@ class CameraOperations:
             config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
             config.enable_stream(rs.stream.color, 1920, 1080, rs.format.bgr8, 30)
 
-            try:
-                self.pipeline.start(config)
-                align_to = rs.stream.color
-                self.align = rs.align(align_to)
+            # try:
+            self.pipeline.start(config)
+            align_to = rs.stream.color
+            self.align = rs.align(align_to)
 
-                profile = self.pipeline.get_active_profile()
-                color_stream = profile.get_stream(rs.stream.color).as_video_stream_profile()
-                intr = color_stream.get_intrinsics()
+            profile = self.pipeline.get_active_profile()
+            color_stream = profile.get_stream(rs.stream.color).as_video_stream_profile()
+            intr = color_stream.get_intrinsics()
 
-                self.camera_matrix = np.array([
-                    [intr.fx, 0, intr.ppx],
-                    [0, intr.fy, intr.ppy],
-                    [0, 0, 1]
-                ])
-                self.dist_coeffs = np.array(intr.coeffs)
+            self.camera_matrix = np.array([
+                [intr.fx, 0, intr.ppx],
+                [0, intr.fy, intr.ppy],
+                [0, 0, 1]
+            ])
+            self.dist_coeffs = np.array(intr.coeffs)
 
-            except Exception as e:
-                print("Could not start RealSense camera, falling back to defaults.")
-                self.USE_REALSENSE = False
-                self.pipeline = None
-                self._use_default_intrinsics()
+            # except Exception as e:
+            #     print("Could not start RealSense camera, falling back to defaults.")
+            #     self.USE_REALSENSE = False
+            #     self.pipeline = None
+            #     self._use_default_intrinsics()
 
         else:
             self.pipeline = None
