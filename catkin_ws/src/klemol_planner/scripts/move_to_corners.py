@@ -10,7 +10,7 @@ from klemol_planner.goals.point_with_orientation import PointWithOrientation
 from klemol_planner.camera_utils.camera_operations import CameraOperations
 from franka_gripper.msg import GraspAction, GraspGoal, MoveAction, MoveGoal
 import actionlib
-
+import numpy as np
 
 class TableCornerMover:
     def __init__(self):
@@ -74,7 +74,7 @@ class TableCornerMover:
 
         rospy.loginfo(f"Prepared {len(self.target_positions)} table corner targets.")
 
-     def calculate_mean_reprojection_error(self):
+    def calculate_mean_reprojection_error(self):
         """
         Calculate the mean reprojection error between calibrated corner positions and camera-detected positions.
         
