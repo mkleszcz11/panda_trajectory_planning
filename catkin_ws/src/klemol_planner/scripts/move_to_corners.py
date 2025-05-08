@@ -12,6 +12,7 @@ from franka_gripper.msg import GraspAction, GraspGoal, MoveAction, MoveGoal
 import actionlib
 import numpy as np
 
+
 class TableCornerMover:
     def __init__(self):
         rospy.init_node("move_to_table_corners")
@@ -74,6 +75,7 @@ class TableCornerMover:
 
         rospy.loginfo(f"Prepared {len(self.target_positions)} table corner targets.")
 
+
     def calculate_mean_reprojection_error(self):
         """
         Calculate the mean reprojection error between calibrated corner positions and camera-detected positions.
@@ -133,6 +135,7 @@ class TableCornerMover:
         
         return mean_error, errors
     
+    
     def move_to_pose_planner(self, pose: PointWithOrientation):
         """Move the robot using MoveIt's motion planner"""
         pose_target = geometry_msgs.msg.Pose()
@@ -155,6 +158,7 @@ class TableCornerMover:
             rospy.loginfo("Motion succeeded.")
         else:
             rospy.logwarn("Motion failed.")
+
 
     def move_gripper(self, open_gripper: bool):
         """
@@ -193,6 +197,7 @@ class TableCornerMover:
                 rospy.logwarn("Gripper: grasp failed.")
             else:
                 rospy.loginfo("Gripper: grasp succeeded.")
+
 
     def execute(self):
         # Close gripper:
