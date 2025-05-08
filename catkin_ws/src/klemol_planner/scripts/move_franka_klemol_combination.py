@@ -346,38 +346,51 @@ class FrankaMotionController:
             all_goal_configs.append(goal_configs)
         return all_goal_configs
 
-    def find_best_joint_combination(self, config_sets):
-        best_path = None
-        best_score = float("inf")
-        best_combo = None
-        start_config = np.array(self.group.get_current_joint_values())
+    def find_best_joint_sequence_reverse(self, config_sets):
+        """
+        Greedy backward search: start from final pose and iteratively pick the best previous config.
+        """
+        num_poses = len(config_sets)
+        best_path = []
+        current = None  # current end configuration
 
-        for combo in itertools.product(*config_sets):
-            total_cost = 0
-            full_path = []
-            valid = True
-            current = start_config
+        for i in reversed(range(num_poses)):
+            best_prev = None
+            best_cost = float("inf")
+            options = config_sets[i]
 
-            for goal_config in combo:
-                self.custom_planner.set_start(current)
-                self.custom_planner.set_goal_pose(None)  # avoid recomputing IK
-                self.custom_planner.goal_configs = [goal_config]
+            if not options:
+                rospy.logwarn(f"No IK options available for pose {i}")
+                return None, None
+
+            if current is None:
+                # We're at the final pose; pick the most manipulable or any valid one
+                best_prev = options[0]
+                best_path.insert(0, best_prev)
+                current = best_prev
+                continue
+
+            for option in options:
+                self.custom_planner.set_start(option)
+                self.custom_planner.goal_configs = [current]
                 path, success = self.custom_planner.plan()
 
                 if not success or not path:
-                    valid = False
-                    break
+                    continue
 
-                total_cost += len(path)
-                full_path.extend(path)
-                current = goal_config
+                cost = len(path)
+                if cost < best_cost:
+                    best_cost = cost
+                    best_prev = option
+                    best_path.insert(0, option)
 
-            if valid and total_cost < best_score:
-                best_score = total_cost
-                best_path = full_path
-                best_combo = combo
+            if best_prev is None:
+                rospy.logwarn(f"Could not find a valid connection for pose {i}")
+                return None, None
 
-        return best_path, best_combo
+            current = best_prev
+
+        return best_path, None
 
     def execute(self):
         """Main execution sequence"""
@@ -438,7 +451,8 @@ class FrankaMotionController:
         config_sets = self.compute_goal_configurations_for_poses(self.target_positions)
 
         rospy.loginfo("Evaluating all IK combinations...")
-        best_path, best_combo = self.find_best_joint_combination(config_sets)
+        best_path, _ = self.find_best_joint_sequence_reverse(config_sets)
+
 
         if best_path:
             rospy.loginfo(f"Best joint sequence found with total cost: {len(best_path)}")
