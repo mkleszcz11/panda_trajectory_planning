@@ -10,7 +10,7 @@ from klemol_planner.goals.point_with_orientation import PointWithOrientation
 from klemol_planner.camera_utils.camera_operations import CameraOperations
 from franka_gripper.msg import GraspAction, GraspGoal, MoveAction, MoveGoal
 import actionlib
-
+import numpy as np
 
 class TableCornerMover:
     def __init__(self):
@@ -29,6 +29,12 @@ class TableCornerMover:
         self.panda_transformations = PandaTransformations(cam_operations=self.camera_operations)
         self.panda_transformations.calibrate_camera()
         # self.panda_transformations.visusalise_environment()
+        
+        # Calculate and print reprojection error
+        mean_error, corner_errors = self.calculate_mean_reprojection_error()
+        rospy.loginfo(f"Mean reprojection error: {mean_error:.4f} meters")
+        for corner, error in corner_errors.items():
+            rospy.loginfo(f"  {corner}: {error:.4f} meters")
 
         # Define the table corners in camera frame (IDs 0 to 3)
         marker_transforms = self.panda_transformations.camera_operations.get_marker_transforms()
@@ -68,6 +74,65 @@ class TableCornerMover:
 
         rospy.loginfo(f"Prepared {len(self.target_positions)} table corner targets.")
 
+    def calculate_mean_reprojection_error(self):
+        """
+        Calculate the mean reprojection error between calibrated corner positions and camera-detected positions.
+        
+        Returns:
+            mean_error: Mean Euclidean distance error across all corners
+            errors: Dictionary of individual errors for each corner
+        """
+        # Get marker transforms from camera
+        marker_transforms = self.panda_transformations.camera_operations.get_marker_transforms()
+        
+        # Dictionary to store individual errors for each corner
+        errors = {}
+        total_error = 0.0
+        corner_count = 0
+        
+        # Corner names to process
+        corner_names = ["corner_0", "corner_1", "corner_2", "corner_3"]
+        
+        # Process each corner
+        for name in corner_names:
+            if name not in marker_transforms:
+                rospy.logwarn(f"Corner '{name}' not detected by camera. Skipping.")
+                continue
+                
+            # Get camera-detected position
+            mat = marker_transforms[name]
+            x_cam, y_cam, z_cam = mat[:3, 3]
+            
+            # Transform from camera frame to base frame
+            corner_cam = PointWithOrientation(x_cam, y_cam, z_cam, 0.0, 0.0, math.pi)
+            corner_base = self.panda_transformations.transform_point(corner_cam, 'camera', 'base')
+            
+            # Get calibrated position from panda_transformations
+            if name in self.panda_transformations.table_corners_translations:
+                x_calib = self.panda_transformations.table_corners_translations[name][0]
+                y_calib = self.panda_transformations.table_corners_translations[name][1]
+                z_calib = self.panda_transformations.table_corners_translations[name][2]
+                
+                # Calculate Euclidean distance error
+                error = np.sqrt((corner_base.x - x_calib)**2 + 
+                                (corner_base.y - y_calib)**2 + 
+                                (corner_base.z - z_calib)**2)
+                
+                errors[name] = error
+                total_error += error
+                corner_count += 1
+                
+                rospy.loginfo(f"{name} - Camera detected: ({corner_base.x:.4f}, {corner_base.y:.4f}, {corner_base.z:.4f})")
+                rospy.loginfo(f"{name} - Calibrated: ({x_calib:.4f}, {y_calib:.4f}, {z_calib:.4f})")
+                rospy.loginfo(f"{name} - Error: {error:.4f} meters")
+            else:
+                rospy.logwarn(f"No calibration data for '{name}'")
+        
+        # Calculate mean error
+        mean_error = total_error / corner_count if corner_count > 0 else 0.0
+        
+        return mean_error, errors
+    
     def move_to_pose_planner(self, pose: PointWithOrientation):
         """Move the robot using MoveIt's motion planner"""
         pose_target = geometry_msgs.msg.Pose()
