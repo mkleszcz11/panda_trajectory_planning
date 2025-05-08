@@ -24,6 +24,7 @@ class RobotModel:
     Provides joint limits, inverse kinematics (via TRAC-IK), forward kinematics (via libfranka). #TODO -> use libfranka not moveit
     """
 
+
     def __init__(self, urdf_string: str, base_link: str, ee_link: str, joint_limits_path: str):
         """
         Initialize the robot model.
@@ -53,10 +54,12 @@ class RobotModel:
         moveit_commander.roscpp_initialize([])
         self.moveit_group = moveit_commander.MoveGroupCommander("panda_arm")
 
+
     def _load_urdf(self, path: str) -> str:
         """Load URDF content from a file."""
         with open(path, 'r') as f:
             return f.read()
+
 
     def sample_random_configuration(self) -> np.ndarray:
         """
@@ -66,6 +69,7 @@ class RobotModel:
             Random joint configuration (7D np.ndarray)
         """
         return np.random.uniform(self.lower_bounds, self.upper_bounds)
+
 
     def is_within_limits(self, config: np.ndarray) -> bool:
         """
@@ -78,6 +82,7 @@ class RobotModel:
             True if within joint limits.
         """
         return np.all(config >= self.lower_bounds) and np.all(config <= self.upper_bounds)
+
 
     def ik(self, pose: PointWithOrientation) -> t.Optional[np.ndarray]:
         """
@@ -93,12 +98,50 @@ class RobotModel:
         seed = self.sample_random_configuration()
         sol = self.ik_solver.get_ik(seed, pose.x, pose.y, pose.z, *quaternion)
         return np.array(sol) if sol is not None else None
-    
+
+
     def ik_with_custom_solver(self, pose: PointWithOrientation, solver: IK, seed: np.ndarray) -> t.Optional[np.ndarray]:
         quaternion = pose.to_quaternion()
         seed = self.sample_random_configuration()
         sol = solver.get_ik(seed, pose.x, pose.y, pose.z, *quaternion)
         return np.array(sol) if sol is not None else None
+
+
+    def ik_manipulability_solver(self, pose: PointWithOrientation, solver: IK, seed: np.ndarray) -> t.Optional[np.ndarray]:
+        """
+        Compute IK using a custom TRAC-IK solver and return the solution with the highest manipulability.
+
+        Args:
+            pose: Desired end-effector pose.
+            solver: A configured TRAC-IK solver instance.
+            seed: Initial joint configuration (used as a base seed, but sampling is repeated).
+
+        Returns:
+            Joint configuration with the highest manipulability, or None if no valid IK found.
+        """
+        quaternion = pose.to_quaternion()
+        best_sol = None
+        best_score = -np.inf
+
+        for _ in range(100):  # try 100 random seeds
+            seed = self.sample_random_configuration()
+            sol = solver.get_ik(seed, pose.x, pose.y, pose.z, *quaternion)
+            if sol is not None:
+                sol = np.array(sol)
+                if not self.is_within_limits(sol):
+                    continue
+
+                # Set the current joint values in MoveIt
+                self.moveit_group.set_joint_value_target(sol.tolist())
+                jacobian = np.array(self.moveit_group.get_jacobian_matrix(sol.tolist()))
+                manipulability = np.sqrt(np.linalg.det(jacobian @ jacobian.T))
+
+                if manipulability > best_score:
+                    best_score = manipulability
+                    best_sol = sol
+
+        return best_sol
+
 
     def fk(self, config: np.ndarray) -> t.Optional[PointWithOrientation]:
         """
