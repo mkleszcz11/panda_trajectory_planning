@@ -206,7 +206,7 @@ class RRTWithConnectingPlanner(Planner):
         diff = config1 - config2
         return np.sqrt(np.sum(weights * diff**2))
     
-    def _generate_goal_configurations(self, goal_pose: PointWithOrientation) -> t.List[np.ndarray]:
+    def generate_goal_configurations(self, goal_pose: PointWithOrientation) -> t.List[np.ndarray]:
         """
         Generate multiple IK solutions for a single end-effector pose.
         
