@@ -392,6 +392,86 @@ class FrankaMotionController:
 
         return best_path, None
 
+    def find_best_joint_sequence_reverse_horizonN(self, config_sets, horizon: int):
+        """
+        Reverse planning with tunable N-step horizon and speed optimisations.
+
+        Args:
+            config_sets: list of IK solutions per pose
+            horizon: number of previous poses to consider (must be ≥1)
+
+        Returns:
+            best_path: list of joint configs in execution order
+        """
+        assert horizon >= 1, "Horizon must be ≥ 1"
+        num_poses = len(config_sets)
+        if num_poses < horizon:
+            rospy.logerr("Not enough poses for given horizon.")
+            return None, None
+
+        planner = self.custom_planner
+        cost_cache = {}  # cache for (start_bytes, goal_bytes) → cost
+        fail_cache = set()  # set of (start_bytes, goal_bytes) that failed
+
+        def get_plan_cost(q_start: np.ndarray, q_goal: np.ndarray) -> t.Optional[int]:
+            key = (q_start.tobytes(), q_goal.tobytes())
+            if key in cost_cache:
+                return cost_cache[key]
+            if key in fail_cache:
+                return None
+
+            planner.set_start(q_start)
+            planner.goal_configs = [q_goal]
+            path, success = planner.plan()
+            if not success or not path:
+                fail_cache.add(key)
+                return None
+
+            cost = len(path)
+            cost_cache[key] = cost
+            return cost
+
+        current = config_sets[-1][0] if config_sets[-1] else None
+        if current is None:
+            rospy.logerr("No IK solutions at final pose.")
+            return None, None
+
+        best_path = [current]
+        i = num_poses - 1 - horizon
+
+        while i >= 0:
+            best_seq = None
+            best_score = float("inf")
+
+            try_sequences = itertools.product(*config_sets[i:i + horizon])
+
+            for seq in try_sequences:
+                segment = list(seq) + [current]
+                total_cost = 0
+                valid = True
+
+                for a, b in zip(segment[:-1], segment[1:]):
+                    cost = get_plan_cost(a, b)
+                    if cost is None:
+                        valid = False
+                        break
+                    total_cost += cost
+
+                if valid and total_cost < best_score:
+                    best_score = total_cost
+                    best_seq = seq
+
+            if best_seq is None:
+                rospy.logerr(f"No valid sequence found at i={i} with horizon={horizon}")
+                return None, None
+
+            best_path = list(best_seq) + best_path
+            current = best_seq[0]
+            i -= horizon
+
+        return best_path, None
+
+
     def execute(self):
         """Main execution sequence"""
 
@@ -451,8 +531,7 @@ class FrankaMotionController:
         config_sets = self.compute_goal_configurations_for_poses(self.target_positions)
 
         rospy.loginfo("Evaluating all IK combinations...")
-        best_path, _ = self.find_best_joint_sequence_reverse(config_sets)
-
+        best_path, _ = self.find_best_joint_sequence_reverse_horizonN(config_sets, horizon=3)
 
         if best_path:
             rospy.loginfo(f"Best joint sequence found with total cost: {len(best_path)}")
