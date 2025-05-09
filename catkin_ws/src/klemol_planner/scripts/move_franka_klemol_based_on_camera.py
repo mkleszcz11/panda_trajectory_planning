@@ -163,20 +163,22 @@ class FrankaMotionController:
         point_box_2 = panda_transformations.transform_point(point_1, 'camera', 'base')
 
         # Check for marker 10 (box_1)
-        if "marker_10" in marker_transforms:
-            x, y, z = marker_transforms["marker_10"][:3, 3]
-            box_cam = PointWithOrientation(x, y, z, 0.0, 0.0, 0.0)
+        if "corner_10" in marker_transforms:
+            x, y, z = marker_transforms["corner_10"][:3, 3]
+            box_cam = PointWithOrientation(x, y, z - 0.12, 0.0, 0.0, 0.0)
             point_box_1 = panda_transformations.transform_point(box_cam, 'camera', 'base')
             visualisation_frames["box_1_in_camera_frame"] = point_box_1.as_matrix()
+            print("Box 1 Found")
         else:
             print("[WARN] marker_10 (box_1) not detected. Using point_1 instead.")
 
         # Check for marker 11 (box_2)
-        if "marker_11" in marker_transforms:
-            x, y, z = marker_transforms["marker_11"][:3, 3]
-            box_cam = PointWithOrientation(x, y, z, 0.0, 0.0, 0.0)
+        if "corner_11" in marker_transforms:
+            x, y, z = marker_transforms["corner_11"][:3, 3]
+            box_cam = PointWithOrientation(x, y, z - 0.12, 0.0, 0.0, 0.0)
             point_box_2 = panda_transformations.transform_point(box_cam, 'camera', 'base')
             visualisation_frames["box_2_in_camera_frame"] = point_box_2.as_matrix()
+            print("Box 2 Found")
         else:
             print("[WARN] marker_11 (box_2) not detected. Using point_1 instead.")
 
@@ -225,8 +227,8 @@ class FrankaMotionController:
         """Execute a joint position command and log the data"""
         self.group.clear_pose_targets()
         rospy.loginfo(f"====== Moving to joint configurations: {joint_positions}")
-        self.group.set_max_velocity_scaling_factor(0.6)      # scale speed
-        self.group.set_max_acceleration_scaling_factor(0.4)  # scale acceleration
+        self.group.set_max_velocity_scaling_factor(0.75)      # scale speed
+        self.group.set_max_acceleration_scaling_factor(0.1)  # scale acceleration
         for pos in joint_positions:
             #try:
             print(f"executing position: {pos}")
@@ -373,7 +375,7 @@ class FrankaMotionController:
 
         # Close gripper, wait 3s, open gripper
         self.move_gripper(False)
-        rospy.sleep(2)
+        rospy.sleep(0.5)
         self.move_gripper(True)
 
         rospy.loginfo("Executing predefined movements using custom Trajectory Planner")
@@ -387,9 +389,13 @@ class FrankaMotionController:
             path_shortcutter = PathShortcutter(self.collision_checker)
             path = path_shortcutter.generate_a_shortcutted_path(path)
 
-            if i == 3:
+            if i == 2:
                 self.move_gripper(False)
-                rospy.sleep(2)
+                rospy.sleep(0.5)
+
+            if i == 5:
+                self.move_gripper(True)
+                rospy.sleep(0.5)
 
             if success:
                 rospy.loginfo(f"RRT path found with {len(path)} waypoints.")
@@ -405,5 +411,5 @@ class FrankaMotionController:
 
 if __name__ == "__main__":
     controller = FrankaMotionController()
-    rospy.sleep(1)  # Allow ROS to initialize
+    rospy.sleep(0.5)  # Allow ROS to initialize
     controller.execute()

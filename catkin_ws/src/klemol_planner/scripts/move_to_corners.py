@@ -8,6 +8,8 @@ import moveit_commander
 from klemol_planner.environment.environment_transformations import PandaTransformations
 from klemol_planner.goals.point_with_orientation import PointWithOrientation
 from klemol_planner.camera_utils.camera_operations import CameraOperations
+from franka_gripper.msg import GraspAction, GraspGoal, MoveAction, MoveGoal
+import actionlib
 
 
 class TableCornerMover:
@@ -26,12 +28,16 @@ class TableCornerMover:
         self.camera_operations = CameraOperations()
         self.panda_transformations = PandaTransformations(cam_operations=self.camera_operations)
         self.panda_transformations.calibrate_camera()
-        self.panda_transformations.visusalise_environment()
+        # self.panda_transformations.visusalise_environment()
 
         # Define the table corners in camera frame (IDs 0 to 3)
         marker_transforms = self.panda_transformations.camera_operations.get_marker_transforms()
-        self.corner_names = ["corner_0", "corner_1", "corner_2", "corner_3"]
+        #self.corner_names = ["corner_0", "corner_1", "corner_2", "corner_3"]
+        self.corner_names = ["corner_0", "corner_1"]
         self.target_positions = []
+
+        cam_frame_point_under_camera = PointWithOrientation(0, 0, 1.0, 0.0, 0.0, math.pi * 0.75)
+        self.point_under_camera = self.panda_transformations.transform_point(cam_frame_point_under_camera, 'camera', 'base')
 
         for name in self.corner_names:
             if name not in marker_transforms:
@@ -41,9 +47,24 @@ class TableCornerMover:
             mat = marker_transforms[name]
             x, y, z = mat[:3, 3]
             # Define approach pose (above corner, facing down)
-            corner_cam = PointWithOrientation(x, y, z - 0.02, 0.0, 0.0, math.pi * 0.75)
+            corner_cam = PointWithOrientation(x, y, z, 0.0, 0.0, math.pi)#math.pi * 0.75)
             corner_base = self.panda_transformations.transform_point(corner_cam, 'camera', 'base')
+            corner_cam_5_cm_above_table = PointWithOrientation(x, y, z - 0.05, 0.0, 0.0, math.pi)#math.pi * 0.75)
+            corner_cam_5_cm_above_table = self.panda_transformations.transform_point(corner_cam_5_cm_above_table, 'camera', 'base')
+            
+            corner_x = self.panda_transformations.table_corners_translations[name][0]
+            corner_y = self.panda_transformations.table_corners_translations[name][1]
+            corner_z = self.panda_transformations.table_corners_translations[name][2]
+            print(f"CALIBRATED CORENER TRANSLATION -> {corner_x}, {corner_y}, {corner_z}")
+            print(f"CORENER BASED ON CAMERA        -> {corner_base.x}, {corner_base.y}, {corner_base.z}")
+            corner_as_calibrated = PointWithOrientation(corner_x, corner_y, corner_z, math.pi, 0.0, 0.0)# math.pi / 2.0)
+            corner_as_calibrated.yaw -= math.pi / 2.0
+
+            self.target_positions.append(self.point_under_camera)
+            self.target_positions.append(corner_cam_5_cm_above_table)
             self.target_positions.append(corner_base)
+            self.target_positions.append(corner_as_calibrated)
+            self.target_positions.append(corner_cam_5_cm_above_table)
 
         rospy.loginfo(f"Prepared {len(self.target_positions)} table corner targets.")
 
@@ -70,12 +91,55 @@ class TableCornerMover:
         else:
             rospy.logwarn("Motion failed.")
 
+    def move_gripper(self, open_gripper: bool):
+        """
+        Open or close the gripper
+        Args:
+            open_gripper: True to open, False to close
+        """
+        if open_gripper:
+            print(f"OPENING GRIPPER")
+            client = actionlib.SimpleActionClient('/franka_gripper/move', MoveAction)
+            client.wait_for_server()
+
+            goal = MoveGoal()
+            goal.width = 0.08  # fully open
+            goal.speed = 0.1
+            client.send_goal(goal)
+            client.wait_for_result()
+
+        else:
+            print(f"CLOSING GRIPPER")
+            client = actionlib.SimpleActionClient('/franka_gripper/grasp', GraspAction)
+            client.wait_for_server()
+
+            goal = GraspGoal()
+            goal.width = 0.02
+            goal.speed = 0.1
+            goal.force = 5
+            goal.epsilon.inner = 0.0
+            goal.epsilon.outer = 0.06
+
+            client.send_goal(goal)
+            client.wait_for_result()
+            result = client.get_result()
+
+            if not result.success:
+                rospy.logwarn("Gripper: grasp failed.")
+            else:
+                rospy.loginfo("Gripper: grasp succeeded.")
+
     def execute(self):
+        # Close gripper:
+        # self.move_gripper(False)
+
         rospy.loginfo("Moving to all detected table corners.")
-        for i, corner_pose in enumerate(self.target_positions):
-            rospy.loginfo(f"Moving to corner {i}")
-            self.move_to_pose_planner(corner_pose)
+        for i, target_pose in enumerate(self.target_positions):
+            rospy.loginfo(f"Moving to pose num {i}")
+            self.move_to_pose_planner(target_pose)
             rospy.sleep(1.0)  # small pause
+
+        self.move_to_pose_planner(self.point_under_camera)
 
         rospy.loginfo("Finished all table corner moves.")
 
