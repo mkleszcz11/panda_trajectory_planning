@@ -133,7 +133,7 @@ class TableCornerMover:
         
         return mean_error, errors
     
-    def move_to_pose_planner(self, pose: PointWithOrientation):
+    def robot_model.move_to_pose_planner(self, pose: PointWithOrientation):
         """Move the robot using MoveIt's motion planner"""
         pose_target = geometry_msgs.msg.Pose()
         quaternion = tf_trans.quaternion_from_euler(pose.roll, pose.pitch, pose.yaw)
@@ -156,7 +156,7 @@ class TableCornerMover:
         else:
             rospy.logwarn("Motion failed.")
 
-    def move_gripper(self, open_gripper: bool):
+    def robot_model.move_gripper(self, open_gripper: bool):
         """
         Open or close the gripper
         Args:
@@ -196,15 +196,15 @@ class TableCornerMover:
 
     def execute(self):
         # Close gripper:
-        # self.move_gripper(False)
+        # self.robot_model.move_gripper(False)
 
         rospy.loginfo("Moving to all detected table corners.")
         for i, target_pose in enumerate(self.target_positions):
             rospy.loginfo(f"Moving to pose num {i}")
-            self.move_to_pose_planner(target_pose)
+            self.robot_model.move_to_pose_planner(target_pose)
             rospy.sleep(1.0)  # small pause
 
-        self.move_to_pose_planner(self.point_under_camera)
+        self.robot_model.move_to_pose_planner(self.point_under_camera)
 
         rospy.loginfo("Finished all table corner moves.")
 

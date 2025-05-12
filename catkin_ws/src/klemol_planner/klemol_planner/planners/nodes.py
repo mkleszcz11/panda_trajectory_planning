@@ -8,6 +8,7 @@ Includes:
 
 import typing as t
 import numpy as np
+from dataclasses import dataclass, field
 
 class TreeNode:
     """
@@ -52,22 +53,35 @@ class TreeNode:
         return np.linalg.norm(config_a - config_b)
 
 
+@dataclass
 class GraphNode:
-    """
-    Node used in graph-based planners like PRM.
+    id: int
+    config: np.ndarray
+    edges: t.Dict[int, float] = field(default_factory=dict)  # maps neighbor_id -> cost
 
-    Attributes:
-        config: Joint configuration (np.ndarray).
-        edges: Dict of neighbor nodes and their connection cost.
-    """
-    def __init__(self, config: np.ndarray):
-        self.config = config
-        self.edges: t.Dict['GraphNode', float] = {}
+    def add_edge(self, other_id: int, cost: float):
+        self.edges[other_id] = cost
 
-    def add_edge(self, other: 'GraphNode', cost: float):
-        self.edges[other] = cost
-        other.edges[self] = cost
+    def remove_edge(self, other_id: int):
+        self.edges.pop(other_id, None)
 
-    def remove_edge(self, other: 'GraphNode'):
-        self.edges.pop(other, None)
-        other.edges.pop(self, None)
+# class GraphNode:
+#     """
+#     Node used in graph-based planners like PRM.
+
+#     Attributes:
+#         config: Joint configuration (np.ndarray).
+#         edges: Dict of neighbor nodes and their connection cost.
+#     """
+#     def __init__(self, config: np.ndarray):
+#         self.config = config
+#         #self.cost = float("inf")
+#         self.edges: t.Dict['GraphNode', float] = {}
+
+#     def add_edge(self, other: 'GraphNode', cost: float):
+#         self.edges[other] = cost
+#         other.edges[self] = cost
+
+#     def remove_edge(self, other: 'GraphNode'):
+#         self.edges.pop(other, None)
+#         other.edges.pop(self, None)

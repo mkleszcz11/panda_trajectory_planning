@@ -4,7 +4,7 @@ import time
 import random
 
 from klemol_planner.planners.base import Planner
-from klemol_planner.environment.robot_model import RobotModel
+from klemol_planner.environment.robot_model import Robot
 from klemol_planner.environment.collision_checker import CollisionChecker
 from klemol_planner.goals.point_with_orientation import PointWithOrientation
 from klemol_planner.planners.nodes import TreeNode
@@ -22,7 +22,7 @@ class RRTPlanner(Planner):
     """
 
     def __init__(self,
-                 robot_model: RobotModel,
+                 robot_model: Robot,
                  collision_checker: CollisionChecker,
                  parameters: dict):
         """
@@ -61,6 +61,7 @@ class RRTPlanner(Planner):
                            urdf_string = self.robot_model.urdf_string,
                            timeout = 1.0,
                            solve_type="Distance")
+        # random_seed = np.random.uniform(self.robot_model.lower_bounds, self.robot_model.upper_bounds)
         goal_config = self.robot_model.ik_with_custom_solver(self.goal_pose, solver = custom_solver)
         if goal_config is None:
             return [], False

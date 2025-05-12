@@ -18,11 +18,11 @@ import time
 from trac_ik_python.trac_ik import IK
 from klemol_planner.environment.environment_transformations import PandaTransformations
 from klemol_planner.goals.point_with_orientation import PointWithOrientation
-from klemol_planner.post_processing.path_shortcutter import PathShortcutter
+from klemol_planner.post_processing.path_post_processing import PathPostProcessing
 import math
 import subprocess
 
-from klemol_planner.environment.robot_model import RobotModel
+from klemol_planner.environment.robot_model import Robot
 from klemol_planner.environment.collision_checker import CollisionChecker
 from klemol_planner.planners.rrt import RRTPlanner
 from klemol_planner.planners.rrt_star import RRTStarPlanner
@@ -51,13 +51,13 @@ class FrankaMotionController:
         self.lower_bounds, self.upper_bounds = self.ik_solver.get_joint_limits()
 
         # Load config paths
-        pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner")
+        pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner")
         xacro_path = f"{pkg_root}/panda_description/panda.urdf.xacro"
         urdf_string = subprocess.check_output(["xacro", xacro_path]).decode("utf-8")
         joint_limits_path = f"{pkg_root}/config/joint_limits.yaml"
 
         # RobotModel initialization
-        self.robot_model = RobotModel(
+        self.robot_model = Robot(
             urdf_string=urdf_string,
             base_link="panda_link0",
             ee_link="panda_link8",
@@ -83,7 +83,7 @@ class FrankaMotionController:
         ###################
         self.start_joint_config = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]  # Standard base pose
         # self.start_joint_config = [0, 0, 0, -0.1, 0, math.pi / 2.0, 0] # Vertical starting pose
-        self.move_to_joint_config(self.start_joint_config)
+        self.robot_model.move_to_joint_config(self.start_joint_config)
 
 
         ##################################
@@ -199,7 +199,7 @@ class FrankaMotionController:
             point_box_2
         ]
 
-    def move_to_joint_config(self, joint_config):
+    def robot_model.move_to_joint_config(self, joint_config):
         """Move the robot to a specific joint configuration."""
         self.group.clear_pose_targets()
         self.group.set_joint_value_target(joint_config)
@@ -207,7 +207,7 @@ class FrankaMotionController:
         self.group.go(wait=True)
         self.group.plan()
 
-    # def move_to_pose_trac_ik(self, position: PointWithOrientation):
+    # def robot_model.move_to_pose_trac_ik(self, position: PointWithOrientation):
     #     """Move the robot using TRAC-IK"""
     #     x, y, z = position.x, position.y, position.z
     #     roll, pitch, yaw = position.roll, position.pitch, position.yaw
@@ -219,11 +219,11 @@ class FrankaMotionController:
 
     #     if joint_positions:
     #         rospy.loginfo(f"TRAC-IK Solution Found for ({x}, {y}, {z})")
-    #         self.execute_joint_positions(joint_positions, "TRAC-IK")
+    #         self.robot_model.execute_joint_positions(joint_positions, "TRAC-IK")
     #     else:
     #         rospy.logerr("No IK solution found!")
 
-    def execute_joint_positions(self, joint_positions, method):
+    def robot_model.execute_joint_positions(self, joint_positions, method):
         """Execute a joint position command and log the data"""
         self.group.clear_pose_targets()
         rospy.loginfo(f"====== Moving to joint configurations: {joint_positions}")
@@ -237,7 +237,7 @@ class FrankaMotionController:
             self.group.go(wait=True)
 
 
-    def move_to_pose_planner(self, pose: PointWithOrientation):
+    def robot_model.move_to_pose_planner(self, pose: PointWithOrientation):
         """Move the robot using MoveIt's motion planner"""
         pose_target = geometry_msgs.msg.Pose()
 
@@ -287,7 +287,7 @@ class FrankaMotionController:
                 writer.writerow(row)
         rospy.loginfo(f"Data saved to {filename}")
 
-    def move_gripper(self, open_gripper: bool):
+    def robot_model.move_gripper(self, open_gripper: bool):
         """
         Open or close the gripper
         Args:
@@ -333,17 +333,17 @@ class FrankaMotionController:
         ####################
         # # # Move to fixed starting joint configuration before each method
         # rospy.loginfo("Moving to Start Joint Configuration before TRAC-IK execution")
-        # self.move_to_joint_config(self.start_joint_config)
+        # self.robot_model.move_to_joint_config(self.start_joint_config)
 
         # rospy.loginfo("Executing predefined movements using TRAC-IK")
         # for pos in self.target_positions:
-        #     self.move_to_pose_trac_ik(pos)
+        #     self.robot_model.move_to_pose_trac_ik(pos)
 
         ##########################
         ##### MOVEIT PLANNER #####
         ##########################
         # rospy.loginfo("Returning to Start Joint Configuration before trajectory planner execution")
-        # self.move_to_joint_config(self.start_joint_config)
+        # self.robot_model.move_to_joint_config(self.start_joint_config)
 
         # # Add a table as an obstacle
         # box_pose = geometry_msgs.msg.PoseStamped()
@@ -357,26 +357,26 @@ class FrankaMotionController:
         # rospy.sleep(1.0)  # Give time for the scene to update
 
         # rospy.loginfo("Executing predefined movements using MoveIt Trajectory Planner")
-        # self.move_gripper(True)
+        # self.robot_model.move_gripper(True)
 
         # for i, pos in enumerate(self.target_positions):
         #     print(f"Moving to position: {pos}, type: {type(pos)}")
         #     rospy.loginfo(f"Moving to position: {pos}")
         #     if i == 4:
-        #         self.move_gripper(False)
+        #         self.robot_model.move_gripper(False)
         #         rospy.sleep(1)
-        #     self.move_to_pose_planner(pos)
+        #     self.robot_model.move_to_pose_planner(pos)
 
         ####################################
         #### CUSTOM TRAJECTORY PLANNER #####
         ####################################
         rospy.loginfo("Returning to Start Joint Configuration after execution")
-        self.move_to_joint_config(self.start_joint_config)
+        self.robot_model.move_to_joint_config(self.start_joint_config)
 
         # Close gripper, wait 3s, open gripper
-        self.move_gripper(False)
+        self.robot_model.move_gripper(False)
         rospy.sleep(0.5)
-        self.move_gripper(True)
+        self.robot_model.move_gripper(True)
 
         rospy.loginfo("Executing predefined movements using custom Trajectory Planner")
         for i,pos in enumerate(self.target_positions):
@@ -386,25 +386,25 @@ class FrankaMotionController:
             path, success = self.custom_planner.plan()
 
             # Call shortcutting function (edit path)
-            path_shortcutter = PathShortcutter(self.collision_checker)
+            path_shortcutter = PathPostProcessing(self.collision_checker)
             path = path_shortcutter.generate_a_shortcutted_path(path)
 
             if i == 2:
-                self.move_gripper(False)
+                self.robot_model.move_gripper(False)
                 rospy.sleep(0.5)
 
             if i == 5:
-                self.move_gripper(True)
+                self.robot_model.move_gripper(True)
                 rospy.sleep(0.5)
 
             if success:
                 rospy.loginfo(f"RRT path found with {len(path)} waypoints.")
                 for config in path:
-                    self.execute_joint_positions(config, "Custom RRT")
+                    self.robot_model.execute_joint_positions(config, "Custom RRT")
             else:
                 rospy.logwarn("RRT planner failed to find a path.")
 
-        self.move_to_joint_config(self.start_joint_config)
+        self.robot_model.move_to_joint_config(self.start_joint_config)
         # # Save data for comparison
         # self.save_data()
         # rospy.loginfo("Execution complete.")

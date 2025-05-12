@@ -5,13 +5,13 @@ Defines the common API for sampling-based planners (plan(), set_start(), set_goa
 
 import typing as t
 import numpy as np
-from klemol_planner.environment.robot_model import RobotModel
+from klemol_planner.environment.robot_model import Robot
 from klemol_planner.environment.collision_checker import CollisionChecker
 from klemol_planner.goals.point_with_orientation import PointWithOrientation
 
 class Planner:
     def __init__(self,
-                 robot_model: RobotModel,
+                 robot_model: Robot,
                  collision_checker: CollisionChecker,
                  parameters: dict):
         """

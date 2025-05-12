@@ -50,11 +50,11 @@ class FrankaIKController:
 
         if joint_positions:
             rospy.loginfo("IK Solution Found!")
-            self.execute_joint_positions(joint_positions)
+            self.robot_model.execute_joint_positions(joint_positions)
         else:
             rospy.logerr("No IK solution found!")
 
-    def execute_joint_positions(self, joint_positions):
+    def robot_model.execute_joint_positions(self, joint_positions):
         # Move the robot to the computed joint values
         self.group.set_joint_value_target(joint_positions)
         self.group.go(wait=True)
@@ -138,11 +138,11 @@ if __name__ == "__main__":
 
 #         if joint_positions:
 #             rospy.loginfo("IK Solution Found!")
-#             self.execute_joint_positions(joint_positions)
+#             self.robot_model.execute_joint_positions(joint_positions)
 #         else:
 #             rospy.logerr("No IK solution found!")
 
-#     def execute_joint_positions(self, joint_positions):
+#     def robot_model.execute_joint_positions(self, joint_positions):
 #         # Move the robot to the computed joint values
 #         self.group.set_joint_value_target(joint_positions)
 #         self.group.go(wait=True)

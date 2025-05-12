@@ -19,7 +19,7 @@ class CameraOperations:
         Initialize the RealSense D435i camera and align depth to color stream.
         If no camera is present (USE_REALSENSE = False), fallback to hardcoded intrinsics.
         """
-        self.USE_REALSENSE = True  # Toggle to False if no camera is connected
+        self.USE_REALSENSE = False  # Toggle to False if no camera is connected
 
         if self.USE_REALSENSE:
             self.pipeline = rs.pipeline()
@@ -315,10 +315,6 @@ class CameraOperations:
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-    import cv2
-    import numpy as np
-    import pyrealsense2 as rs  # Assuming this is used based on context
-    import math
 
     # Assume this function is part of a class where 'self' is valid
     # and contains necessary attributes like self.pipeline, self.get_image,

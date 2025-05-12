@@ -4,7 +4,7 @@ import time
 import random
 
 from klemol_planner.planners.base import Planner
-from klemol_planner.environment.robot_model import RobotModel
+from klemol_planner.environment.robot_model import Robot
 from klemol_planner.environment.collision_checker import CollisionChecker
 from klemol_planner.goals.point_with_orientation import PointWithOrientation
 from klemol_planner.planners.nodes import TreeNode
@@ -19,7 +19,7 @@ class RRTStarPlanner(Planner):
     """
 
     def __init__(self,
-                 robot_model: RobotModel,
+                 robot_model: Robot,
                  collision_checker: CollisionChecker,
                  parameters: dict):
         super().__init__(robot_model, collision_checker, parameters)

@@ -55,7 +55,7 @@ class FrankaMotionController:
         # Storage for data comparison
         self.data_log = []
 
-    def move_to_joint_config(self, joint_config):
+    def robot_model.move_to_joint_config(self, joint_config):
         """Move the robot to a specific joint configuration."""
         self.group.set_joint_value_target(joint_config)
         rospy.loginfo(f"Moving to joint configuration: {joint_config}")
@@ -64,7 +64,7 @@ class FrankaMotionController:
         end_time = time.time()
         self.log_data(joint_config, "Fixed Joint Configuration", start_time, end_time)
 
-    def move_to_pose_trac_ik(self, position: PointWithOrientation):
+    def robot_model.move_to_pose_trac_ik(self, position: PointWithOrientation):
         """Move the robot using TRAC-IK"""
         x, y, z = position.x, position.y, position.z
         roll, pitch, yaw = position.roll, position.pitch, position.yaw
@@ -74,11 +74,11 @@ class FrankaMotionController:
 
         if joint_positions:
             rospy.loginfo(f"TRAC-IK Solution Found for ({x}, {y}, {z})")
-            self.execute_joint_positions(joint_positions, "TRAC-IK")
+            self.robot_model.execute_joint_positions(joint_positions, "TRAC-IK")
         else:
             rospy.logerr("No IK solution found!")
 
-    def execute_joint_positions(self, joint_positions, method):
+    def robot_model.execute_joint_positions(self, joint_positions, method):
         """Execute a joint position command and log the data"""
         self.group.set_joint_value_target(joint_positions)
         start_time = time.time()
@@ -87,7 +87,7 @@ class FrankaMotionController:
 
         self.log_data(joint_positions, method, start_time, end_time)
 
-    def move_to_pose_planner(self, pose: PointWithOrientation):
+    def robot_model.move_to_pose_planner(self, pose: PointWithOrientation):
         """Move the robot using MoveIt's motion planner"""
         pose_target = geometry_msgs.msg.Pose()
 
@@ -143,17 +143,17 @@ class FrankaMotionController:
         ####################
         # # # Move to fixed starting joint configuration before each method
         # rospy.loginfo("Moving to Start Joint Configuration before TRAC-IK execution")
-        # self.move_to_joint_config(self.start_joint_config)
+        # self.robot_model.move_to_joint_config(self.start_joint_config)
 
         # rospy.loginfo("Executing predefined movements using TRAC-IK")
         # for pos in self.target_positions:
-        #     self.move_to_pose_trac_ik(pos)
+        #     self.robot_model.move_to_pose_trac_ik(pos)
 
         ##########################
         ##### MOVEIT PLANNER #####
         ##########################
         rospy.loginfo("Returning to Start Joint Configuration before trajectory planner execution")
-        self.move_to_joint_config(self.start_joint_config)
+        self.robot_model.move_to_joint_config(self.start_joint_config)
 
         # Add a table as an obstacle
         box_pose = geometry_msgs.msg.PoseStamped()
@@ -170,13 +170,13 @@ class FrankaMotionController:
         for pos in self.target_positions:
             print(f"Moving to position: {pos}, type: {type(pos)}")
             rospy.loginfo(f"Moving to position: {pos}")
-            self.move_to_pose_planner(pos)
+            self.robot_model.move_to_pose_planner(pos)
 
         ####################################
         #### CUSTOM TRAJECTORY PLANNER #####
         ####################################
         rospy.loginfo("Returning to Start Joint Configuration after execution")
-        self.move_to_joint_config(self.start_joint_config)
+        self.robot_model.move_to_joint_config(self.start_joint_config)
 
         rospy.loginfo("Executing predefined movements using custom Trajectory Planner")
         for pos in self.target_positions:
