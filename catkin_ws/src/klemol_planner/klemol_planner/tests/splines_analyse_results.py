@@ -32,6 +32,8 @@ def plot_joint_comparison(data, joint_index=0, velocity_cap=2.6100 * 0.25):
 
     # Plot each mode on top of each other, aligned to time 0
     for mode in mode_labels:
+        if mode == "undefined":
+            continue
         mask = modes == mode
         mode_time = time[mask] - time[mask][0]  # Align time to start from 0
         

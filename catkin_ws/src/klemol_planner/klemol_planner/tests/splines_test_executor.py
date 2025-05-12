@@ -21,7 +21,7 @@ class TestExecutor:
             self.logger.callback,
         )
 
-    def run_test(self, mode="spline"):
+    def run_test(self, mode="raw", velocity_limits=np.ones(7)):
         rospy.loginfo(f"Running test in mode: {mode}")
         self.logger.set_mode(mode)
 
@@ -43,9 +43,9 @@ class TestExecutor:
         path = [
             np.array([0.5315303232882735, -0.6280944614953183, -1.295222514333675, -2.7098521010502994, -0.8629544292895819, 2.304309252112395, 0.7451632836879227]),
             np.array([0.34066860874413685, -0.7676133076880172, -0.6526554741155994, -2.1289542294024066, -0.4365001806550408, 1.486466334709319, 0.582596192755382]),
-            np.array([-0.7193406015171879, 0.7030311349809253, 1.7279603680764843, -1.462167062832389, -0.7095803065350061, 1.3887629938557762, 1.685751010149957]),
-            np.array([0.031114206971786906, 0.280148668136432, 0.1660746720242674, -1.7795346119093702, 0.5708601494733205, 1.69713915906316, 0.18080576717360675]),
-            np.array([0.5315303232882735, -0.6280944614953183, -1.295222514333675, -2.7098521010502994, -0.8629544292895819, 2.304309252112395, 0.7451632836879227])
+            # np.array([-0.7193406015171879, 0.7030311349809253, 1.7279603680764843, -1.462167062832389, -0.7095803065350061, 1.3887629938557762, 1.685751010149957]),
+            # np.array([0.031114206971786906, 0.280148668136432, 0.1660746720242674, -1.7795346119093702, 0.5708601494733205, 1.69713915906316, 0.18080576717360675]),
+            # np.array([0.5315303232882735, -0.6280944614953183, -1.295222514333675, -2.7098521010502994, -0.8629544292895819, 2.304309252112395, 0.7451632836879227])
         ]
 
         post_processing = PathPostProcessing(self.collision_checker)
@@ -55,26 +55,29 @@ class TestExecutor:
             for idx, config in enumerate(path):
                 self.robot_model.execute_joint_positions(config, "Raw")
                 print(f"RAW MODE - moving to {idx}/{len(path)}")
+
         elif mode == "spline_time_parametrised":
             traj = post_processing.interpolate_trajectory_time_parameterised(
                 path,
                 joint_names=self.robot_model.group.get_active_joints(),
             )
             self.robot_model.send_trajectory_to_controller(traj)
-        elif mode == "spline_time_parametrised_with_constraints":
-            # Use 0.25 velocity limits:
-            velocity_limits = self.robot_model.velocity_limits
-            for i, limit in enumerate(velocity_limits):
-                velocity_limits[i] = limit * 0.2
 
-            print(f" |||||||| Velocity limits: {velocity_limits}")
-
-            traj = post_processing.interpolate_trajectory_with_constraints(
+        elif mode == "spline_cubic_hermite":
+            traj = post_processing.interpolate_trajectory_with_cubic_hermite_splines(
                 path=path,
                 joint_names=self.robot_model.group.get_active_joints(),
                 velocity_limits=velocity_limits,
-                get_current_joint_values=self.robot_model.group.get_current_joint_values
             )
             self.robot_model.send_trajectory_to_controller(traj)
+
+        elif mode == "spline_quintic":
+            traj = post_processing.interpolate_quintic_trajectory(
+                path=path,
+                joint_names=self.robot_model.group.get_active_joints(),
+                velocity_limits=velocity_limits,
+            )
+            self.robot_model.send_trajectory_to_controller(traj)
+
 
         rospy.sleep(1.0)  # Let the robot stabilize after each move

@@ -3,11 +3,14 @@ import typing as t
 
 from klemol_planner.environment.robot_model import Robot
 from klemol_planner.environment.collision_checker import CollisionChecker
+from klemol_planner.environment.robot_joint_states_reader import JointStatesReader
 import trajectory_msgs.msg
 import std_msgs.msg
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 import scipy.interpolate
 from std_msgs.msg import Header
+from scipy.interpolate import make_interp_spline
+
 
 import rospy
 
@@ -18,13 +21,115 @@ class PathPostProcessing:
     def __init__(self, collision_checker: CollisionChecker):
         self.collision_checker = collision_checker
 
-    def interpolate_trajectory_with_constraints(
+    def interpolate_quintic_trajectory(
         self,
         path: t.List[np.ndarray],
         joint_names: t.List[str],
         velocity_limits: np.ndarray,
-        get_current_joint_values: t.Callable[[], np.ndarray], 
-        effort_limits: t.Optional[np.ndarray] = None,  # placeholder for future extension
+        dt: float = 0.01,
+        safety_margin: float = 0.9
+    ) -> JointTrajectory:
+        """
+        True quintic spline interpolation for joint-space trajectory.
+
+        Estimates position, velocity, and acceleration at waypoints, and interpolates
+        with 5th-order splines.
+
+        Args:
+            path: List of joint configurations.
+            joint_names: Joint names.
+            velocity_limits: Max joint velocities.
+            get_current_joint_values: Callable to get current joint config.
+            dt: Sampling interval.
+            safety_margin: Multiplier <1.0 to stay below limits.
+
+        Returns:
+            JointTrajectory message.
+        """
+        joint_reader = JointStatesReader(joint_names)
+
+        # Wait until the first message arrives
+        while joint_reader.latest_state is None and not rospy.is_shutdown():
+            rospy.sleep(0.05)
+
+
+        q_current = joint_reader.get_current_positions()
+        qdot_current = joint_reader.get_current_velocities()
+
+        # Combine initial position with path
+        q = np.array([q_current] + list(path))
+        n_waypoints = len(q)
+        n_joints = len(joint_names)
+
+        # --- Time allocation ---
+        times = [0.0]
+        for i in range(1, n_waypoints):
+            delta_q = np.abs(q[i] - q[i - 1])
+            t_required = np.max(delta_q / (velocity_limits * safety_margin))
+            times.append(times[-1] + max(t_required, 0.4))  # enforce minimum segment duration
+        times = np.array(times)
+
+        # --- Velocity and acceleration estimation ---
+        vel = np.zeros_like(q)
+        acc = np.zeros_like(q)
+
+        # Use robot-reported velocity at start
+        vel[0] = qdot_current
+
+        for i in range(1, n_waypoints - 1):
+            dt1 = times[i] - times[i - 1]
+            dt2 = times[i + 1] - times[i]
+            vel[i] = (q[i + 1] - q[i - 1]) / (dt1 + dt2)
+            acc[i] = 2 * ((q[i + 1] - q[i]) / dt2 - (q[i] - q[i - 1]) / dt1) / (dt1 + dt2)
+
+        # Final velocity and acceleration (finite differences)
+        vel[-1] = (q[-1] - q[-2]) / (times[-1] - times[-2])
+        acc[0] = 2 * ((q[1] - q[0]) / (times[1] - times[0])) / (times[1] - times[0])
+        acc[-1] = 2 * ((q[-1] - q[-2]) / (times[-1] - times[-2])) / (times[-1] - times[-2])
+
+        # Clamp intermediate velocities
+        for i in range(1, n_waypoints):  # skip vel[0], already clamped
+            vel[i] = np.clip(vel[i], -velocity_limits * safety_margin, velocity_limits * safety_margin)
+
+        # --- Fit quintic splines ---
+        splines = []
+        for j in range(n_joints):
+            spline = make_interp_spline(
+                times,
+                q[:, j],
+                k=5,
+                bc_type=(
+                    [(1, float(vel[0, j])), (2, float(acc[0, j]))],      # left boundary
+                    [(1, float(vel[-1, j])), (2, float(acc[-1, j]))]      # right boundary
+                )
+            )
+            splines.append(spline)
+
+        traj_msg = JointTrajectory()
+        traj_msg.joint_names = joint_names
+        traj_msg.header = Header()
+
+        # Sample from 0.1s onward
+        # start_time_offset = 0.1
+        t_samples = np.arange(0, times[-1] + dt, dt)
+
+        for t_val in t_samples:
+            point = JointTrajectoryPoint()
+            point.positions = [spline(t_val) for spline in splines]
+            point.velocities = [spline.derivative(1)(t_val) for spline in splines]
+            point.accelerations = [spline.derivative(2)(t_val) for spline in splines]
+            point.time_from_start = rospy.Duration.from_sec(t_val)
+            traj_msg.points.append(point)
+
+        traj_msg.header.stamp = rospy.Time.now() + rospy.Duration(0.2)
+
+        return traj_msg
+
+    def interpolate_trajectory_with_cubic_hermite_splines(
+        self,
+        path: t.List[np.ndarray],
+        joint_names: t.List[str],
+        velocity_limits: np.ndarray,
         dt: float = 0.01,
         safety_margin: float = 0.9
     ) -> JointTrajectory:
@@ -44,9 +149,18 @@ class PathPostProcessing:
         Returns:
             JointTrajectory message.
         """
-        # --- Prepend current joint config ---
-        q_current = np.array(get_current_joint_values())
+        joint_reader = JointStatesReader(joint_names)
+
+        # Wait until the first message arrives
+        while joint_reader.latest_state is None and not rospy.is_shutdown():
+            rospy.sleep(0.05)
+
+        q_current = joint_reader.get_current_positions()
+        qdot_current = joint_reader.get_current_velocities()
+
+        # Combine initial position with path
         q = np.array([q_current] + list(path))
+        n_waypoints = len(q)
         n_joints = len(joint_names)
 
         # --- Estimate time allocation based on velocity limits ---
@@ -57,21 +171,27 @@ class PathPostProcessing:
             times.append(times[-1] + max(required_time, 0.4))  # min duration
         times = np.array(times)
 
-        # --- Estimate velocities using finite differences ---
+        # --- Velocity and acceleration estimation ---
         vel = np.zeros_like(q)
-        for i in range(1, len(q) - 1):
+        acc = np.zeros_like(q)
+
+        # Use robot-reported velocity at start
+        vel[0] = qdot_current
+
+        for i in range(1, n_waypoints - 1):
             dt1 = times[i] - times[i - 1]
             dt2 = times[i + 1] - times[i]
             vel[i] = (q[i + 1] - q[i - 1]) / (dt1 + dt2)
-        vel[0] = (q[1] - q[0]) / (times[1] - times[0])
-        vel[-1] = (q[-1] - q[-2]) / (times[-1] - times[-2])
+            acc[i] = 2 * ((q[i + 1] - q[i]) / dt2 - (q[i] - q[i - 1]) / dt1) / (dt1 + dt2)
 
-        # --- Clamp velocities to limits ---
-        for i in range(len(vel)):
-            for j in range(n_joints):
-                limit = velocity_limits[j] * safety_margin
-                if abs(vel[i, j]) > limit:
-                    vel[i, j] = np.sign(vel[i, j]) * limit
+        # Final velocity and acceleration (finite differences)
+        vel[-1] = (q[-1] - q[-2]) / (times[-1] - times[-2])
+        acc[0] = 2 * ((q[1] - q[0]) / (times[1] - times[0])) / (times[1] - times[0])
+        acc[-1] = 2 * ((q[-1] - q[-2]) / (times[-1] - times[-2])) / (times[-1] - times[-2])
+
+        # Clamp intermediate velocities
+        for i in range(1, n_waypoints):  # skip vel[0], already clamped
+            vel[i] = np.clip(vel[i], -velocity_limits * safety_margin, velocity_limits * safety_margin)
 
         # --- Fit splines with estimated velocities ---
         splines = [
@@ -85,9 +205,6 @@ class PathPostProcessing:
         traj_msg.joint_names = joint_names
         traj_msg.header = Header()
 
-        start_delay = 0.5  # seconds
-        traj_msg.header.stamp = rospy.Time.now() + rospy.Duration(start_delay)
-
         for t in t_samples:
             point = JointTrajectoryPoint()
             point.positions = [spline(t) for spline in splines]
@@ -95,6 +212,8 @@ class PathPostProcessing:
             point.accelerations = [spline.derivative(nu=2)(t) for spline in splines]
             point.time_from_start = rospy.Duration.from_sec(float(t))
             traj_msg.points.append(point)
+
+        traj_msg.header.stamp = rospy.Time.now() + rospy.Duration(0.2)
 
         return traj_msg
 
