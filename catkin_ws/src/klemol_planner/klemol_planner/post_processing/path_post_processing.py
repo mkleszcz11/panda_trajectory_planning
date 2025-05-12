@@ -74,7 +74,7 @@ class PathPostProcessing:
         acc = np.zeros_like(q)
 
         # Use robot-reported velocity at start
-        vel[0] = qdot_current
+        vel[0] = np.clip(qdot_current, -velocity_limits * safety_margin, velocity_limits * safety_margin)
 
         for i in range(1, n_waypoints - 1):
             dt1 = times[i] - times[i - 1]
@@ -83,9 +83,9 @@ class PathPostProcessing:
             acc[i] = 2 * ((q[i + 1] - q[i]) / dt2 - (q[i] - q[i - 1]) / dt1) / (dt1 + dt2)
 
         # Final velocity and acceleration (finite differences)
-        vel[-1] = (q[-1] - q[-2]) / (times[-1] - times[-2])
+        vel[-1] = np.zeros(n_joints) # Final velocity (finite difference)
         acc[0] = 2 * ((q[1] - q[0]) / (times[1] - times[0])) / (times[1] - times[0])
-        acc[-1] = 2 * ((q[-1] - q[-2]) / (times[-1] - times[-2])) / (times[-1] - times[-2])
+        acc[-1] = np.zeros(n_joints) #2 * ((q[-1] - q[-2]) / (times[-1] - times[-2])) / (times[-1] - times[-2])
 
         # Clamp intermediate velocities
         for i in range(1, n_waypoints):  # skip vel[0], already clamped
@@ -180,7 +180,7 @@ class PathPostProcessing:
             dt2 = times[i + 1] - times[i]
             vel[i] = (q[i + 1] - q[i - 1]) / (dt1 + dt2)
 
-        vel[-1] = (q[-1] - q[-2]) / (times[-1] - times[-2])
+        vel[-1] = np.zeros(n_joints) # Final velocity (finite difference)
 
         # Clamp intermediate velocities
         for i in range(1, n_waypoints):
