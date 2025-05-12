@@ -10,7 +10,7 @@ from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 import scipy.interpolate
 from std_msgs.msg import Header
 from scipy.interpolate import make_interp_spline
-
+from scipy.interpolate import CubicHermiteSpline
 
 import rospy
 
@@ -134,7 +134,7 @@ class PathPostProcessing:
         safety_margin: float = 0.9
     ) -> JointTrajectory:
         """
-        Time-parameterized quintic spline interpolation with velocity constraints,
+        Time-parameterized Cubic spline interpolation with velocity constraints,
         using smooth estimated velocities at waypoints.
 
         Args:
@@ -151,70 +151,68 @@ class PathPostProcessing:
         """
         joint_reader = JointStatesReader(joint_names)
 
-        # Wait until the first message arrives
+        # Wait until state received
         while joint_reader.latest_state is None and not rospy.is_shutdown():
             rospy.sleep(0.05)
 
         q_current = joint_reader.get_current_positions()
         qdot_current = joint_reader.get_current_velocities()
 
-        # Combine initial position with path
+        # Combine with path
         q = np.array([q_current] + list(path))
         n_waypoints = len(q)
         n_joints = len(joint_names)
 
-        # --- Estimate time allocation based on velocity limits ---
+        # --- Time allocation ---
         times = [0.0]
-        for i in range(1, len(q)):
+        for i in range(1, n_waypoints):
             delta_q = np.abs(q[i] - q[i - 1])
-            required_time = np.max(delta_q / (velocity_limits * safety_margin))
-            times.append(times[-1] + max(required_time, 0.4))  # min duration
+            t_required = np.max(delta_q / (velocity_limits * safety_margin))
+            times.append(times[-1] + max(t_required, 0.4))  # min segment time
         times = np.array(times)
 
-        # --- Velocity and acceleration estimation ---
+        # --- Estimate velocities ---
         vel = np.zeros_like(q)
-        acc = np.zeros_like(q)
-
-        # Use robot-reported velocity at start
-        vel[0] = qdot_current
+        vel[0] = np.clip(qdot_current, -velocity_limits * safety_margin, velocity_limits * safety_margin)
 
         for i in range(1, n_waypoints - 1):
             dt1 = times[i] - times[i - 1]
             dt2 = times[i + 1] - times[i]
             vel[i] = (q[i + 1] - q[i - 1]) / (dt1 + dt2)
-            acc[i] = 2 * ((q[i + 1] - q[i]) / dt2 - (q[i] - q[i - 1]) / dt1) / (dt1 + dt2)
 
-        # Final velocity and acceleration (finite differences)
         vel[-1] = (q[-1] - q[-2]) / (times[-1] - times[-2])
-        acc[0] = 2 * ((q[1] - q[0]) / (times[1] - times[0])) / (times[1] - times[0])
-        acc[-1] = 2 * ((q[-1] - q[-2]) / (times[-1] - times[-2])) / (times[-1] - times[-2])
 
         # Clamp intermediate velocities
-        for i in range(1, n_waypoints):  # skip vel[0], already clamped
+        for i in range(1, n_waypoints):
             vel[i] = np.clip(vel[i], -velocity_limits * safety_margin, velocity_limits * safety_margin)
 
-        # --- Fit splines with estimated velocities ---
+        # --- Fit cubic Hermite splines per joint ---
         splines = [
-            scipy.interpolate.CubicHermiteSpline(times, q[:, j], vel[:, j])
+            CubicHermiteSpline(times, q[:, j], vel[:, j])
             for j in range(n_joints)
         ]
 
         # --- Sample the trajectory ---
-        t_samples = np.arange(0, times[-1] + dt, dt)
+        start_time_offset = 0.1
+        t_samples = np.arange(start_time_offset, times[-1] + dt, dt)
+
         traj_msg = JointTrajectory()
         traj_msg.joint_names = joint_names
         traj_msg.header = Header()
 
-        for t in t_samples:
+        for t_val in t_samples:
             point = JointTrajectoryPoint()
-            point.positions = [spline(t) for spline in splines]
-            point.velocities = [spline.derivative()(t) for spline in splines]
-            point.accelerations = [spline.derivative(nu=2)(t) for spline in splines]
-            point.time_from_start = rospy.Duration.from_sec(float(t))
+            point.positions = [spline(t_val) for spline in splines]
+            point.velocities = [spline.derivative()(t_val) for spline in splines]
+            point.accelerations = [spline.derivative(nu=2)(t_val) for spline in splines]
+            point.time_from_start = rospy.Duration.from_sec(t_val)
             traj_msg.points.append(point)
 
         traj_msg.header.stamp = rospy.Time.now() + rospy.Duration(0.2)
 
+        print("Trajectory starts at:", traj_msg.header.stamp.to_sec())
+        print("First point time_from_start:", traj_msg.points[0].time_from_start.to_sec())
+        print("ROS now:", rospy.Time.now().to_sec())
         return traj_msg
 
     def interpolate_trajectory_time_parameterised(self, path: t.List[np.ndarray], joint_names: t.List[str], dt: float = 1.05) -> JointTrajectory:

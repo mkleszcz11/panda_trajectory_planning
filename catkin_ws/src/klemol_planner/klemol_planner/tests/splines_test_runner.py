@@ -20,7 +20,7 @@ if __name__ == "__main__":
     # Use 0.25 velocity limits:
     velocity_limits = copy.deepcopy(robot_model.velocity_limits)
     for i, limit in enumerate(velocity_limits):
-        velocity_limits[i] = limit * 0.2
+        velocity_limits[i] = limit * 0.25
 
     # Standard motion
     robot_model.move_to_joint_config(start_joint_config)
