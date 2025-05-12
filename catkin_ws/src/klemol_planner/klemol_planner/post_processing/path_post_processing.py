@@ -4,6 +4,7 @@ import typing as t
 from klemol_planner.environment.robot_model import Robot
 from klemol_planner.environment.collision_checker import CollisionChecker
 from klemol_planner.environment.robot_joint_states_reader import JointStatesReader
+from klemol_planner.environment.robot_joint_states_reader import JointStatesReader
 import trajectory_msgs.msg
 import std_msgs.msg
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint

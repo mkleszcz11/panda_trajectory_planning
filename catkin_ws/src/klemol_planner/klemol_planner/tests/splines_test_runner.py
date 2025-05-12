@@ -20,6 +20,11 @@ if __name__ == "__main__":
     # Use 0.25 velocity limits:
     velocity_limits = copy.deepcopy(robot_model.velocity_limits)
     for i, limit in enumerate(velocity_limits):
+        velocity_limits[i] = limit * 0.2
+
+    # Use 0.25 velocity limits:
+    velocity_limits = copy.deepcopy(robot_model.velocity_limits)
+    for i, limit in enumerate(velocity_limits):
         velocity_limits[i] = limit * 0.25
 
     # Standard motion
@@ -30,11 +35,16 @@ if __name__ == "__main__":
     # Cubic splines
     robot_model.move_to_joint_config(start_joint_config)
     rospy.sleep(2)
+    executor.run_test(mode="spline_cubic_hermite")
+    # Cubic splines
+    robot_model.move_to_joint_config(start_joint_config)
+    rospy.sleep(2)
     executor.run_test(mode="spline_cubic_hermite", velocity_limits=velocity_limits)
 
     # Quintic splines
     robot_model.move_to_joint_config(start_joint_config)
     rospy.sleep(2)
+    executor.run_test(mode="spline_quintic")
     executor.run_test(mode="spline_quintic", velocity_limits=velocity_limits)
 
     logger.save("/tmp/franka_motion_comparison.npz")
