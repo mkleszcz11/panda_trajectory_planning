@@ -27,24 +27,20 @@ if __name__ == "__main__":
     for i, limit in enumerate(velocity_limits):
         velocity_limits[i] = limit * 0.25
 
-    # Standard motion
-    robot_model.move_to_joint_config(start_joint_config)
-    rospy.sleep(2)
-    executor.run_test(mode="raw", velocity_limits=velocity_limits)
+    # # Standard motion
+    # robot_model.move_to_joint_config(start_joint_config)
+    # rospy.sleep(2)
+    # executor.run_test(mode="raw", velocity_limits=velocity_limits)
 
-    # Cubic splines
-    robot_model.move_to_joint_config(start_joint_config)
-    rospy.sleep(2)
-    executor.run_test(mode="spline_cubic_hermite")
-    # Cubic splines
-    robot_model.move_to_joint_config(start_joint_config)
-    rospy.sleep(2)
-    executor.run_test(mode="spline_cubic_hermite", velocity_limits=velocity_limits)
+    # # Cubic splines
+    # robot_model.move_to_joint_config(start_joint_config)
+    # rospy.sleep(2)
+    # executor.run_test(mode="spline_cubic_hermite")
+
 
     # Quintic splines
     robot_model.move_to_joint_config(start_joint_config)
     rospy.sleep(2)
-    executor.run_test(mode="spline_quintic")
     executor.run_test(mode="spline_quintic", velocity_limits=velocity_limits)
 
     logger.save("/tmp/franka_motion_comparison.npz")
