@@ -676,42 +676,282 @@ class CameraOperations:
 
 if __name__ == "__main__":
     cam = CameraOperations()
+    # live_banana_grasping_tracked.py
 
-    model_name = 'yolov8l-seg.pt'
-    if not os.path.exists(model_name):
-        print(f"YOLO model {model_name} not found. Attempting to download...")
+    import pyrealsense2 as rs
+    import numpy as np
+    import cv2
+    import os
+    import time
+    from datetime import datetime
+    from ultralytics import YOLO
+    import math
+    import torch
+
+    # --- Import Custom Modules ---
+    try:
+        from capture_realsense_frame_yolo import setup_realsense_pipeline, get_aligned_frames, save_frame
+
+        print("Imported capture functions from capture_realsense_frame_yolo.py")
+    except ImportError:
+        print("Error: Could not import from capture_realsense_frame_yolo.py.")
+        exit()
+
+    try:
+        # Ensure you are using the correct filename if you saved it as antipodal_grasp_planner2.py
+        from antipodal_grasp_planner2 import AntipodalGraspPlanner
+
+        print("Imported AntipodalGraspPlanner class.")
+    except ImportError:
+        print("Error: Could not import AntipodalGraspPlanner.")
+        print("Please ensure antipodal_grasp_planner2.py (or the correct name) is in the same directory or accessible.")
+        exit()
+
+
+    # --- END Import Custom Modules ---
+
+    def convert_depth_to_phys_coord_using_realsense_intrinsics(x, y, depth, intrinsics):
+        if intrinsics is None or depth <= 0: return 0.0, 0.0, 0.0
         try:
-            torch.hub.download_url_to_file(
-                'https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8l-seg.pt', model_name)
-            print(f"Downloaded {model_name}")
-        except Exception as e:
-            print(f"Failed to download {model_name}: {e}")
-            yolo_seg_model = None
+            x = int(max(0, min(x, intrinsics.width - 1)))
+            y = int(max(0, min(y, intrinsics.height - 1)))
+            result = rs.rs2_deproject_pixel_to_point(intrinsics, [x, y], depth)
+            return result[0], result[1], result[2]
+        except Exception:
+            return 0.0, 0.0, 0.0
 
-    if os.path.exists(model_name):
-        print(f"Loading YOLO model: {model_name}...")
-        yolo_seg_model = YOLO(model_name)
-        print("YOLO model loaded.")
+
+    # --- Main Script Logic ---
+    print("Setting up RealSense pipeline...")
+    pipeline, profile, color_profile = setup_realsense_pipeline(request_max_res=False)
+
+    if pipeline is None: exit()
+
+    color_intrinsics = color_profile.get_intrinsics()
+    actual_format = color_profile.format()
+    print(
+        f"Pipeline started. Color Format: {actual_format}, Intrinsics: W={color_intrinsics.width}, H={color_intrinsics.height}")
+
+    if not torch.cuda.is_available():
+        print("!!! WARNING: CUDA is not available. Running on CPU. !!!")
+        device = 'cpu'
     else:
-        yolo_seg_model = None
-        print(f"YOLO model {model_name} still not found. Grasp test will be skipped.")
+        print(f"CUDA GPU detected: {torch.cuda.get_device_name(0)}")
+        device = 'cuda'
 
-    if yolo_seg_model:
-        target_object_label = "banana"
-        print(f"\nAttempting to find grasp for: '{target_object_label}'...")
-        grasp_center, grasp_yaw_rad = cam.get_yolo_grasp_for_object(
-            target_object_label, yolo_seg_model, visualize=True
-        )
+    print(f"Loading YOLOv8 Segmentation model onto {device.upper()}...")
+    try:
+        model = YOLO('yolov8l-seg.pt')  # Or your preferred model
+        model.to(device)
+        coco_names = model.names
+        print("YOLOv8 model loaded.")
+    except Exception as e:
+        print(f"Error loading YOLO model: {e}.")
+        if pipeline: pipeline.stop()
+        exit()
 
-        if grasp_center is not None and grasp_yaw_rad is not None:
-            print(f"\nSuccessfully found grasp for '{target_object_label}':")
-            print(f"  Grasp Center (3D, camera frame): {grasp_center}")
-            print(
-                f"  Grasp Yaw (in camera XY plane, radians): {grasp_yaw_rad:.3f} ({math.degrees(grasp_yaw_rad):.1f} degrees)")
-        else:
-            print(f"\nCould not find a suitable grasp for '{target_object_label}'.")
-    else:
-        print("YOLO model not available. Skipping YOLO grasp test.")
+    print("Initializing Antipodal Grasp Planner...")
+    GRASP_MAX_OPENING_PIXELS = 120
+    GRASP_MIN_WIDTH_PIXELS = 10
+    GRASP_ANGLE_TOLERANCE_DEGREES = 10  # Increased for curved objects
+    GRASP_CONTOUR_EPSILON_FACTOR = 0.004  # More detail for curves
+    GRASP_NORMAL_NEIGHBORHOOD_K = 5  # Larger k for more detailed contours
+    GRASP_DIST_PENALTY_WEIGHT = 0.03
+    GRASP_WIDTH_FAVOR_NARROW_WEIGHT = 0.02  # Favor slightly narrower for elongated
+
+    grasp_planner = AntipodalGraspPlanner(
+        max_gripper_opening_px=GRASP_MAX_OPENING_PIXELS,
+        min_grasp_width_px=GRASP_MIN_WIDTH_PIXELS,
+        angle_tolerance_deg=GRASP_ANGLE_TOLERANCE_DEGREES,
+        contour_approx_epsilon_factor=GRASP_CONTOUR_EPSILON_FACTOR,
+        normal_neighborhood_k=GRASP_NORMAL_NEIGHBORHOOD_K,
+        dist_penalty_weight=GRASP_DIST_PENALTY_WEIGHT,
+        width_favor_narrow_weight=GRASP_WIDTH_FAVOR_NARROW_WEIGHT
+    )
+    print("Antipodal Grasp Planner initialized.")
+    TARGET_CLASS_NAME = "banana"  # Change to your target: "cell phone", "cup", etc.
+
+    confidence_threshold = 0.5
+    output_folder = f"live_{TARGET_CLASS_NAME.replace(' ', '_')}_grasps_tracked"
+    np.random.seed(42)  # Consistent colors
+    mask_colors = np.random.randint(0, 256, (len(coco_names), 3), dtype=np.uint8)
+
+    # --- Dictionary to store best grasps for tracked objects ---
+    tracked_object_best_local_grasps = {}  # Key: track_id, Value: best local grasp dict found so far
+    # -------------------------------------------------------------
+
+    print(f"\nStarting live detection, tracking, and grasping for '{TARGET_CLASS_NAME}'... Press 'q' to quit.")
+    fps, frame_count, start_time = 0.0, 0, time.time()
+
+    try:
+        while True:
+            color_image_from_realsense, depth_frame = get_aligned_frames(pipeline, align_to=rs.stream.color)
+            if color_image_from_realsense is None or depth_frame is None:
+                time.sleep(0.01)
+                continue
+
+            color_image_bgr = color_image_from_realsense
+            draw_image = color_image_bgr.copy()
+            overlay = draw_image.copy()
+
+            # --- Perform Object Detection, Segmentation & TRACKING ---
+            # Using model.track() for object tracking
+            results = model.track(color_image_bgr, persist=True, tracker="botsort.yaml", verbose=False)
+            # For ByteTrack: tracker="bytetrack.yaml"
+            # `persist=True` tells YOLO to remember tracks between frames.
+            # ------------------------------------------------------
+
+            current_frame_grasps_to_visualize = []
+            current_frame_target_centroids = {}  # Store centroids for visualization {track_id: centroid}
+
+            if results and results[0].boxes is not None and results[0].masks is not None:
+                boxes = results[0].boxes.xyxy.cpu().numpy()
+                confs = results[0].boxes.conf.cpu().numpy()
+                clss = results[0].boxes.cls.cpu().numpy()
+                masks_data_raw = results[0].masks.data.cpu().numpy()
+
+                # --- Get Tracking IDs ---
+                track_ids = None
+                if results[0].boxes.id is not None:
+                    track_ids = results[0].boxes.id.cpu().numpy().astype(int)
+                # ------------------------
+
+                current_img_shape = (draw_image.shape[0], draw_image.shape[1])
+
+                for i in range(len(boxes)):
+                    if confs[i] < confidence_threshold: continue
+
+                    x1, y1, x2, y2 = map(int, boxes[i])
+                    cls_id = int(clss[i])
+                    class_name = coco_names[cls_id]
+                    track_id = track_ids[i] if track_ids is not None else -1  # Use -1 if no track ID
+
+                    # Draw BBox and label
+                    label_text = f"ID:{track_id} {class_name} {confs[i]:.2f}" if track_id != -1 else f"{class_name} {confs[i]:.2f}"
+                    cv2.rectangle(draw_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    cv2.putText(draw_image, label_text, (x1, y1 - 10 if y1 > 20 else y1 + 20),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
+                    individual_mask_raw = masks_data_raw[i]
+                    if individual_mask_raw.shape != current_img_shape:
+                        individual_mask_resized = cv2.resize(individual_mask_raw,
+                                                             (current_img_shape[1], current_img_shape[0]),
+                                                             interpolation=cv2.INTER_NEAREST)
+                    else:
+                        individual_mask_resized = individual_mask_raw
+                    binary_mask_for_planner = (individual_mask_resized > 0.5).astype(np.uint8) * 255
+
+                    mask_for_overlay = binary_mask_for_planner.astype(bool)
+                    overlay[mask_for_overlay] = mask_colors[cls_id].tolist()
+
+                    if class_name == TARGET_CLASS_NAME and track_id != -1:  # Only process tracked target objects
+                        new_local_grasps, current_obj_centroid = grasp_planner.find_grasps(
+                            binary_mask_for_planner.copy())
+
+                        if current_obj_centroid is not None:
+                            current_frame_target_centroids[track_id] = current_obj_centroid
+
+                        best_new_local_grasp_this_frame = None
+                        if new_local_grasps:
+                            best_new_local_grasp_this_frame = new_local_grasps[0]  # Highest score from current frame
+
+                            # --- Update stored best grasp for this track_id ---
+                            if track_id not in tracked_object_best_local_grasps:
+                                tracked_object_best_local_grasps[track_id] = best_new_local_grasp_this_frame
+                                print(
+                                    f"  New track ID {track_id} ({TARGET_CLASS_NAME}): Storing initial best grasp (Score: {best_new_local_grasp_this_frame['score']:.3f})")
+                            else:
+                                stored_grasp = tracked_object_best_local_grasps[track_id]
+                                if best_new_local_grasp_this_frame['score'] > stored_grasp['score']:
+                                    tracked_object_best_local_grasps[track_id] = best_new_local_grasp_this_frame
+                                    print(
+                                        f"  Track ID {track_id} ({TARGET_CLASS_NAME}): Updated best grasp (New Score: {best_new_local_grasp_this_frame['score']:.3f} > Old Score: {stored_grasp['score']:.3f})")
+                            # --------------------------------------------------
+
+                        # --- Use the (potentially updated) stored best grasp for visualization and 3D ---
+                        if track_id in tracked_object_best_local_grasps and current_obj_centroid is not None:
+                            stable_local_grasp_to_use = tracked_object_best_local_grasps[track_id]
+                            abs_grasp_to_visualize = grasp_planner.transform_grasp_to_image_space(
+                                stable_local_grasp_to_use,
+                                current_obj_centroid)
+
+                            if abs_grasp_to_visualize:
+                                current_frame_grasps_to_visualize.append(abs_grasp_to_visualize)
+
+                                # --- Convert this stable grasp to 3D (example: for the first target object with a grasp) ---
+                                if len(current_frame_grasps_to_visualize) == 1:  # For simplicity, only print 3D for one
+                                    p1_2d, p2_2d, center_2d = abs_grasp_to_visualize['p1'], abs_grasp_to_visualize[
+                                        'p2'], \
+                                        abs_grasp_to_visualize['center_px']
+                                    depth_w, depth_h = depth_frame.get_width(), depth_frame.get_height()
+                                    d1 = depth_frame.get_distance(p1_2d[0] % depth_w,
+                                                                  p1_2d[1] % depth_h) if depth_frame else 0
+                                    d2 = depth_frame.get_distance(p2_2d[0] % depth_w,
+                                                                  p2_2d[1] % depth_h) if depth_frame else 0
+                                    dc = depth_frame.get_distance(center_2d[0] % depth_w,
+                                                                  center_2d[1] % depth_h) if depth_frame else 0
+
+                                    p1_3d_m = convert_depth_to_phys_coord_using_realsense_intrinsics(p1_2d[0], p1_2d[1],
+                                                                                                     d1,
+                                                                                                     color_intrinsics)
+                                    p2_3d_m = convert_depth_to_phys_coord_using_realsense_intrinsics(p2_2d[0], p2_2d[1],
+                                                                                                     d2,
+                                                                                                     color_intrinsics)
+                                    width_3d_m = math.sqrt(
+                                        sum((c1 - c2) ** 2 for c1, c2 in zip(p1_3d_m, p2_3d_m))) if all(
+                                        c != 0 for c in p1_3d_m) and all(c != 0 for c in p2_3d_m) else 0.0
+                                    print(
+                                        f"    Track ID {track_id} - Stable Grasp 3D (m): P1({p1_3d_m[0]:.3f},{p1_3d_m[1]:.3f},{p1_3d_m[2]:.3f}), "
+                                        f"P2({p2_3d_m[0]:.3f},{p2_3d_m[1]:.3f},{p2_3d_m[2]:.3f}), Width: {width_3d_m:.3f}m")
+                        # -----------------------------------------------------------------------------
+
+            cv2.addWeighted(overlay, 0.4, draw_image, 0.6, 0, draw_image)
+
+            if current_frame_grasps_to_visualize:
+                # For visualization, we need to pass the *current* centroid of each object if we want to show the CoG dot correctly
+                # However, visualize_grasps currently takes only one object_centroid_abs.
+                # For simplicity, we'll visualize grasps without showing individual CoGs per grasp in this quick merge.
+                # Or, pass the centroid of the first object for which grasps are shown.
+                first_tracked_id_with_grasp = None
+                if current_frame_grasps_to_visualize:  # Check again
+                    # Find a track_id associated with the grasps being visualized
+                    # This is a bit tricky if multiple objects are shown. Simplification:
+                    if current_frame_target_centroids:
+                        first_tracked_id_with_grasp = next(iter(current_frame_target_centroids))
+
+                draw_image = grasp_planner.visualize_grasps(
+                    draw_image,
+                    current_frame_grasps_to_visualize,
+                    num_top_grasps=len(current_frame_grasps_to_visualize),
+                    # Show all found stable grasps for tracked targets
+                    object_centroid_abs=current_frame_target_centroids.get(
+                        first_tracked_id_with_grasp) if first_tracked_id_with_grasp else None
+                )
+
+            frame_count += 1
+            elapsed_time = time.time() - start_time
+            if elapsed_time >= 1.0:
+                fps = frame_count / elapsed_time
+                frame_count, start_time = 0, time.time()
+            cv2.putText(draw_image, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
+            display_h = 720
+            scale_factor = display_h / draw_image.shape[0]
+            img_display = cv2.resize(draw_image, (int(draw_image.shape[1] * scale_factor), display_h))
+            cv2.imshow(f"Live Tracked {TARGET_CLASS_NAME} Grasping", img_display)
+
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q'):
+                print("Exit key 'q' pressed.")
+                if not os.path.exists(output_folder): os.makedirs(output_folder)
+                save_frame(color_image_bgr, output_folder, prefix="last_color")
+                save_frame(draw_image, output_folder, prefix="last_detection_grasp_tracked")
+                break
+    finally:
+        print("Stopping RealSense pipeline.")
+        if 'pipeline' in locals() and pipeline: pipeline.stop()
+        cv2.destroyAllWindows()
+        print("Script finished.")
 
 # if __name__ == "__main__":
 #     cam = CameraOperations()
