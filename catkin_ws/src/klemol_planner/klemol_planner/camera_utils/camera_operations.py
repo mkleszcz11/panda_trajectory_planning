@@ -1,16 +1,40 @@
 import math
-import typing as t
-import numpy as np
-import cv2
 import os
-import matplotlib.pyplot as plt
+import typing as t
+import cv2
+import matplotlib.pyplot as plt # Keep for ArUco visualization if re-enabled
+import numpy as np
+import torch
+from ultralytics import YOLO
 from mpl_toolkits.mplot3d import Axes3D
+
 
 try:
     import pyrealsense2 as rs
 except ImportError:
     print("RealSense SDK not found. Camera operations will be limited to hardcoded intrinsics.")
     rs = None
+
+
+try:
+    from antipodal_grasp_planner2 import AntipodalGraspPlanner
+    print("Successfully imported AntipodalGraspPlanner.")
+except ImportError:
+    print("WARNING: Could not import AntipodalGraspPlanner. YOLO grasp planning will fail.")
+    AntipodalGraspPlanner = None
+
+
+# --- Static method for getting depth ---
+def convert_depth_to_phys_coord_using_realsense_intrinsics(x, y, depth, intrinsics_obj):
+    if intrinsics_obj is None or depth <= 0: return 0.0, 0.0, 0.0
+    try:
+        x = int(max(0, min(x, intrinsics_obj.width - 1)))
+        y = int(max(0, min(y, intrinsics_obj.height - 1)))
+        result = rs.rs2_deproject_pixel_to_point(intrinsics_obj, [x, y], depth)
+        return result[0], result[1], result[2]
+    except Exception:
+        return 0.0, 0.0, 0.0
+
 
 
 class CameraOperations:
@@ -35,6 +59,8 @@ class CameraOperations:
                 profile = self.pipeline.get_active_profile()
                 color_stream = profile.get_stream(rs.stream.color).as_video_stream_profile()
                 intr = color_stream.get_intrinsics()
+                self.color_width = intr.width
+                self.color_height = intr.height
 
                 self.camera_matrix = np.array([
                     [intr.fx, 0, intr.ppx],
@@ -59,6 +85,7 @@ class CameraOperations:
         self.detector = cv2.aruco.ArucoDetector(self.dictionary, self.parameters)
         self.marker_length = 0.05  # meters
 
+
     def _use_default_intrinsics(self):
         """
         Use default intrinsics for D435i @ 1920x1080.
@@ -69,6 +96,30 @@ class CameraOperations:
             [0, 0, 1.0]
         ])
         self.dist_coeffs = np.zeros(5)
+
+
+    def _get_rs_intrinsics_object(self) -> t.Optional[rs.intrinsics]:
+        if not rs: return None
+        if self.USE_REALSENSE and self.pipeline:
+            try:
+                profile = self.pipeline.get_active_profile()
+                color_stream = profile.get_stream(rs.stream.color).as_video_stream_profile()
+                return color_stream.get_intrinsics()
+            except Exception:  # Fall through to stored if live fails
+                pass
+
+        if self.camera_matrix is None: return None
+        intr = rs.intrinsics()
+        intr.width = self.color_width
+        intr.height = self.color_height
+        intr.ppx = self.camera_matrix[0, 2]
+        intr.ppy = self.camera_matrix[1, 2]
+        intr.fx = self.camera_matrix[0, 0]
+        intr.fy = self.camera_matrix[1, 1]
+        intr.model = rs.distortion.none  # Assuming no/minimal distortion or already undistorted
+        intr.coeffs = list(self.dist_coeffs) if self.dist_coeffs is not None else [0.0] * 5
+        return intr
+
 
     def get_image(self) -> t.Tuple[np.ndarray, np.ndarray]:
         """
@@ -97,6 +148,147 @@ class CameraOperations:
             # Assume depth is 1.2 meters for all pixels
             depth_frame = np.full(color_image.shape[:2], 1.2, dtype=np.float32)
             return color_image, depth_frame
+
+
+    def get_yolo_grasp_for_object(self, target_label: str, yolo_model,
+                                  confidence_thresh=0.25, visualize: bool = False) \
+            -> t.Tuple[t.Optional[np.ndarray], t.Optional[float]]:
+        """
+        Detects an object, plans a grasp, returns 3D center and 2D yaw (in camera XY plane).
+
+        Args:
+            target_label (str): Object label (e.g., "banana").
+            yolo_model: Pre-loaded YOLOv8 segmentation model.
+            confidence_thresh (float): Min confidence for YOLO.
+            visualize (bool): If True, displays intermediate steps.
+
+        Returns:
+            A tuple (grasp_center_3d, grasp_yaw_radians_cam_xy):
+            - grasp_center_3d: np.array([X, Y, Z]) in camera frame (meters).
+                               X right, Y down, Z "forward" (your convention is -Z for workspace forward).
+            - grasp_yaw_radians_cam_xy: float, yaw angle of the grasp line (p1 to p2)
+                                        in the camera's XY plane, relative to camera X-axis.
+            Returns (None, None) if not found or error.
+        """
+        color_image, depth_frame_obj = self.get_image()
+        if color_image is None or depth_frame_obj is None:
+            return None, None
+
+        yolo_results = yolo_model.predict(color_image, verbose=False,
+                                          device='cuda' if torch.cuda.is_available() else 'cpu')
+        result = yolo_results[0]
+
+        if result.masks is None or result.boxes is None:
+            if visualize: cv2.imshow("YOLO Grasp (No Detections)", cv2.resize(color_image, (
+            self.color_width // 2, self.color_height // 2))); cv2.waitKey(1)
+            return None, None
+
+        binary_mask_target = None
+        target_box = None  # For visualization
+        for i in range(len(result.boxes)):
+            conf = result.boxes.conf[i].item()
+            cls_id = int(result.boxes.cls[i].item())
+            label = result.names[cls_id]
+            if label == target_label and conf >= confidence_thresh:
+                mask_raw = result.masks.data[i].cpu().numpy()
+                binary_mask_target = cv2.resize(mask_raw, (self.color_width, self.color_height),
+                                                interpolation=cv2.INTER_NEAREST)
+                binary_mask_target = (binary_mask_target > 0.5).astype(np.uint8) * 255
+                target_box = result.boxes.xyxy[i].cpu().numpy().astype(int)
+                break
+
+        if binary_mask_target is None:
+            if visualize:
+                cv2.putText(color_image, f"'{target_label}' not found", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1,
+                            (0, 0, 255), 2)
+                cv2.imshow("YOLO Grasp (Target Not Found)",
+                           cv2.resize(color_image, (self.color_width // 2, self.color_height // 2)));
+                cv2.waitKey(1)
+            return None, None
+
+        planner = AntipodalGraspPlanner(
+            max_gripper_opening_px=120, min_grasp_width_px=10,
+            angle_tolerance_deg=10, contour_approx_epsilon_factor=0.004,
+            normal_neighborhood_k=5, dist_penalty_weight=0.03, width_favor_narrow_weight=0.02
+        )
+        local_grasps, object_centroid_px = planner.find_grasps(binary_mask_target)
+
+        if not local_grasps or object_centroid_px is None:
+            if visualize:
+                cv2.rectangle(color_image, (target_box[0], target_box[1]), (target_box[2], target_box[3]), (0, 255, 0),
+                              1)
+                cv2.putText(color_image, f"'{target_label}' (No Grasps)", (target_box[0], target_box[1] - 5),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 100, 255), 2)
+                cv2.imshow("YOLO Grasp (No Grasps Found)",
+                           cv2.resize(color_image, (self.color_width // 2, self.color_height // 2)));
+                cv2.waitKey(1)
+            return None, None
+
+        best_local_grasp = local_grasps[0]
+        abs_grasp = planner.transform_grasp_to_image_space(best_local_grasp, object_centroid_px)
+        if not abs_grasp: return None, None
+
+        rs_intrinsics = self._get_rs_intrinsics_object()
+        if rs_intrinsics is None: return None, None
+
+        points_3d = {}
+        for name, pt2d_tuple in [('p1', abs_grasp['p1']), ('p2', abs_grasp['p2'])]:
+            u, v = int(pt2d_tuple[0]), int(pt2d_tuple[1])
+            u_c = max(0, min(u, self.color_width - 1));
+            v_c = max(0, min(v, self.color_height - 1))
+            depth_val = depth_frame_obj.get_distance(u_c, v_c) if rs and isinstance(depth_frame_obj, rs.frame) else \
+            depth_frame_obj[v_c, u_c]
+            if depth_val <= 0:
+                points_3d[name] = np.array([0, 0, 0])
+            else:
+                points_3d[name] = np.array(
+                    convert_depth_to_phys_coord_using_realsense_intrinsics(u, v, depth_val, rs_intrinsics))
+
+        p1_3d, p2_3d = points_3d['p1'], points_3d['p2']
+        if p1_3d[2] <= 1e-3 or p2_3d[2] <= 1e-3:  # Check Z-depth validity
+            if visualize:
+                vis_img_fail = planner.visualize_grasps(color_image, [abs_grasp], 1,
+                                                        object_centroid_abs=object_centroid_px)
+                cv2.putText(vis_img_fail, "Invalid 3D points for grasp", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
+                            (0, 0, 255), 2)
+                cv2.imshow("YOLO Grasp", cv2.resize(vis_img_fail, (self.color_width // 2, self.color_height // 2)));
+                cv2.waitKey(1)
+            return None, None
+
+        grasp_center_3d = (p1_3d + p2_3d) / 2.0
+
+        # Calculate Yaw: Angle of the line (p1_3d to p2_3d) projected onto camera's XY plane,
+        # relative to camera's X-axis.
+        # Camera X-axis: [1,0,0], Camera Y-axis: [0,1,0]
+        # Vector representing grasp width direction in 3D (from p1 to p2)
+        grasp_vector_3d = p2_3d - p1_3d
+
+        # Project this vector onto camera's XY plane (i.e., take its X and Y components)
+        dx_cam = grasp_vector_3d[0]  # X component in camera frame
+        dy_cam = grasp_vector_3d[1]  # Y component in camera frame
+
+        # Yaw is the angle of this (dx_cam, dy_cam) vector
+        grasp_yaw_radians_cam_xy = math.atan2(dy_cam, dx_cam)
+
+        if visualize:
+            vis_img = planner.visualize_grasps(color_image, [abs_grasp], 1, object_centroid_abs=object_centroid_px)
+            cv2.putText(vis_img, f"'{target_label}' Grasp Found", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0),
+                        2)
+            cv2.putText(vis_img,
+                        f"Center 3D:({grasp_center_3d[0]:.2f},{grasp_center_3d[1]:.2f},{grasp_center_3d[2]:.2f})m",
+                        (10, vis_img.shape[0] - 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 255, 50), 1)
+            cv2.putText(vis_img, f"Yaw (camXY): {math.degrees(grasp_yaw_radians_cam_xy):.1f} deg",
+                        (10, vis_img.shape[0] - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 255, 50), 1)
+
+            # Draw the grasp line used for yaw calculation in 2D
+            p1_2d_tuple = tuple(map(int, abs_grasp['p1']))
+            p2_2d_tuple = tuple(map(int, abs_grasp['p2']))
+            cv2.arrowedLine(vis_img, p1_2d_tuple, p2_2d_tuple, (255, 100, 255), 2, tipLength=0.05)
+
+            cv2.imshow("YOLO Grasp", cv2.resize(vis_img, (self.color_width // 2, self.color_height // 2)))
+            cv2.waitKey(0)
+
+        return grasp_center_3d, grasp_yaw_radians_cam_xy
 
 
     def find_aruco_codes_in_the_image(self) -> t.List[t.Tuple[int, np.ndarray, np.ndarray]]:
@@ -161,6 +353,7 @@ class CameraOperations:
 
         return detected_markers
 
+
     def estimate_pose_single_marker(self, corners, marker_length, camera_matrix, dist_coeffs, z_override=None):
         """
         Manually estimate pose of a single marker using solvePnP.
@@ -199,6 +392,7 @@ class CameraOperations:
         yaw = np.arctan2(rotation_matrix[1, 0], rotation_matrix[0, 0])
 
         return rvec, tvec
+
 
     def get_marker_transforms(self) -> t.Dict[str, np.ndarray]:
         """
@@ -283,6 +477,7 @@ class CameraOperations:
 
         return transforms
 
+
     def show_rgb_and_depth(self):
         """
         Display the RGB and depth images side-by-side. 
@@ -314,6 +509,7 @@ class CameraOperations:
         cv2.imshow("RGB + Depth", images_combined)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
+
 
     def find_tennis(self):
 
@@ -440,6 +636,7 @@ class CameraOperations:
             print("No circles detected.")
             return False, 0, 0, 0
 
+
     def convert_depth_to_phys_coord_using_realsense(self, x, y, depth, camera_matrix, dist_coeffs, width, height):
         """
         Convert depth and pixel coordinates to 3D physical coordinates using RealSense intrinsics.
@@ -475,6 +672,46 @@ class CameraOperations:
 
         # RealSense output [right (X), down (Y), forward (Z)].
         return result[0], result[1], result[2]
+
+
+if __name__ == "__main__":
+    cam = CameraOperations()
+
+    model_name = 'yolov8l-seg.pt'
+    if not os.path.exists(model_name):
+        print(f"YOLO model {model_name} not found. Attempting to download...")
+        try:
+            torch.hub.download_url_to_file(
+                'https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8l-seg.pt', model_name)
+            print(f"Downloaded {model_name}")
+        except Exception as e:
+            print(f"Failed to download {model_name}: {e}")
+            yolo_seg_model = None
+
+    if os.path.exists(model_name):
+        print(f"Loading YOLO model: {model_name}...")
+        yolo_seg_model = YOLO(model_name)
+        print("YOLO model loaded.")
+    else:
+        yolo_seg_model = None
+        print(f"YOLO model {model_name} still not found. Grasp test will be skipped.")
+
+    if yolo_seg_model:
+        target_object_label = "banana"
+        print(f"\nAttempting to find grasp for: '{target_object_label}'...")
+        grasp_center, grasp_yaw_rad = cam.get_yolo_grasp_for_object(
+            target_object_label, yolo_seg_model, visualize=True
+        )
+
+        if grasp_center is not None and grasp_yaw_rad is not None:
+            print(f"\nSuccessfully found grasp for '{target_object_label}':")
+            print(f"  Grasp Center (3D, camera frame): {grasp_center}")
+            print(
+                f"  Grasp Yaw (in camera XY plane, radians): {grasp_yaw_rad:.3f} ({math.degrees(grasp_yaw_rad):.1f} degrees)")
+        else:
+            print(f"\nCould not find a suitable grasp for '{target_object_label}'.")
+    else:
+        print("YOLO model not available. Skipping YOLO grasp test.")
 
 # if __name__ == "__main__":
 #     cam = CameraOperations()
