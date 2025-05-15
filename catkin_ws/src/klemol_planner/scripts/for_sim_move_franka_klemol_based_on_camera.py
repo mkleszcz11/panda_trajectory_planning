@@ -56,8 +56,9 @@ class FrankaMotionController:
         self.collision_checker = CollisionChecker(self.robot_model, group_name="panda_arm")
 
         # Load RRT-specific parameters from config
-        algorithm = "rrt"  # or "rrt_star", "rrt_with_connecting", "prm"
+        algorithm = "rrt" #"rrt" / "rrt_star" / "rrt_with_connecting" / "prm"
         algorithm_params = load_planner_params(algorithm)
+        # self.custom_planner = RRTPlanner(self.robot_model, self.collision_checker, algorithm_params)
         self.custom_planner = RRTPlanner(self.robot_model, self.collision_checker, algorithm_params)
 
         camera_operations = CameraOperations()
@@ -87,33 +88,27 @@ class FrankaMotionController:
 
         point_1 = PointWithOrientation(0.0, 0.0, 0.9, 0.0, 0.0, math.pi * 0.75)
 
-        object_in_camera_frame = PointWithOrientation(0.15, 0.15, 1.2, 0.0, 0.05, math.pi * 0.75)
-        object_in_base_frame = panda_transformations.transform_point(object_in_camera_frame, 'camera', 'base')
+        object_in_camera_frame = PointWithOrientation(0.0, 0.0, 1.2, 0.0, 0.05, math.pi * 0.75)
+        self.object_in_base_frame = panda_transformations.transform_point(object_in_camera_frame, 'camera', 'base')
 
-        point_above_object_in_base_frame = PointWithOrientation(
-            object_in_base_frame.x,
-            object_in_base_frame.y,
-            object_in_base_frame.z + 0.12,
-            object_in_base_frame.roll,
-            object_in_base_frame.pitch,
-            object_in_base_frame.yaw
+        self.point_above_object_in_base_frame = PointWithOrientation(
+            self.object_in_base_frame.x,
+            self.object_in_base_frame.y,
+            self.object_in_base_frame.z + 0.12,
+            self.object_in_base_frame.roll,
+            self.object_in_base_frame.pitch,
+            self.object_in_base_frame.yaw
         )
 
         # Prepare a dictionary for visualization
         visualisation_frames = {}
 
         # Optional: add any extra objects (e.g. a detected tennis ball)
-        visualisation_frames["tennis"] = object_in_base_frame.as_matrix()
+        visualisation_frames["object"] = self.object_in_base_frame.as_matrix()
+        visualisation_frames["above_object"] = self.point_above_object_in_base_frame.as_matrix()
 
         # Visualise
         panda_transformations.visusalise_environment(visualisation_frames)
-
-        self.target_positions = [
-            point_above_object_in_base_frame,
-            object_in_base_frame,
-            point_above_object_in_base_frame,
-            panda_transformations.transform_point(point_1, 'camera', 'base')
-        ]
 
     def execute(self):
         """Main execution sequence"""
@@ -124,36 +119,75 @@ class FrankaMotionController:
         rospy.loginfo("Returning to Start Joint Configuration after execution")
         self.robot_model.move_to_joint_config(self.start_joint_config)
 
-        # Open gripper
+        ### Open gripper
         self.robot_model.move_gripper(True)
 
-        rospy.loginfo("Executing predefined movements using custom Trajectory Planner")
-        for i,pos in enumerate(self.target_positions):
-            if i == 2:
-                self.robot_model.move_gripper(False)
-                rospy.sleep(1)
+        #### Move above the object
+        current_config = np.array(self.robot_model.group.get_current_joint_values())
+        self.custom_planner.set_start(current_config)
+        self.custom_planner.set_goal(self.point_above_object_in_base_frame)
+        path, success = self.custom_planner.plan()
 
-            # THIS IS CUSTOM PLANNER
-            current_config = np.array(self.robot_model.group.get_current_joint_values())
-            self.custom_planner.set_start(current_config)
-            self.custom_planner.set_goal(pos)
-            path, success = self.custom_planner.plan()
+        #### Call shortcutting function (edit path)
+        path_post_processing = PathPostProcessing(self.collision_checker)
+        # path = path_post_processing.generate_a_shortcutted_path(path)
 
-            # # Call shortcutting function (edit path)
-            path_post_processing = PathPostProcessing(self.collision_checker)
-            path = path_post_processing.generate_a_shortcutted_path(path)
+        ### 
+        if success:
+            rospy.loginfo(f"Planner found path with {len(path)} waypoints.")
+            rospy.loginfo(f"Fitting spline to the path...")
+            # Smooth the path and execute smooth trajectory
+            trajectory = path_post_processing.interpolate_quintic_trajectory(
+                path=path,
+                joint_names=self.robot_model.group.get_active_joints(),
+                velocity_limits=self.robot_model.velocity_limits,
+            )
+            self.robot_model.send_trajectory_to_controller(trajectory)
+        else:
+            rospy.logwarn("RRT planner failed to find a path.")
 
-            if success:
-                rospy.loginfo(f"RRT path found with {len(path)} waypoints.")
+        ### Move to the object in a little bit more straight line
+        self.robot_model.move_to_pose_planner(self.object_in_base_frame)
 
-                # Smooth the path and execute smooth trajectory
-                trajectory = path_post_processing.interpolate_trajectory_time_parameterised(path, joint_names=self.robot_model.group.get_active_joints())
-                self.robot_model.send_trajectory_to_controller(trajectory)
+        ### Close gripper
+        self.robot_model.move_gripper(False)
 
-                # for config in path:
-                #     self.robot_model.execute_joint_positions(config, "Custom RRT")
-            else:
-                rospy.logwarn("RRT planner failed to find a path.")
+        ### Move back up
+        self.robot_model.move_to_pose_planner(self.point_above_object_in_base_frame)
+
+
+
+        # rospy.loginfo("Executing predefined movements using custom Trajectory Planner")
+        # for i,pos in enumerate(self.target_positions):
+        #     if i == 2:
+        #         self.robot_model.move_gripper(False)
+        #         rospy.sleep(1)
+
+        #     # THIS IS CUSTOM PLANNER
+        #     current_config = np.array(self.robot_model.group.get_current_joint_values())
+        #     self.custom_planner.set_start(current_config)
+        #     self.custom_planner.set_goal(pos)
+        #     path, success = self.custom_planner.plan()
+
+        #     # # Call shortcutting function (edit path)
+        #     path_post_processing = PathPostProcessing(self.collision_checker)
+        #     # path = path_post_processing.generate_a_shortcutted_path(path)
+
+        #     if success:
+        #         rospy.loginfo(f"RRT path found with {len(path)} waypoints.")
+
+        #         # Smooth the path and execute smooth trajectory
+        #         trajectory = path_post_processing.interpolate_quintic_trajectory(
+        #             path=path,
+        #             joint_names=self.robot_model.group.get_active_joints(),
+        #             velocity_limits=self.robot_model.velocity_limits,
+        #         )
+        #         self.robot_model.send_trajectory_to_controller(trajectory)
+
+        #         # for config in path:
+        #         #     self.robot_model.execute_joint_positions(config, "Custom RRT")
+        #     else:
+        #         rospy.logwarn("RRT planner failed to find a path.")
 
 if __name__ == "__main__":
     controller = FrankaMotionController()

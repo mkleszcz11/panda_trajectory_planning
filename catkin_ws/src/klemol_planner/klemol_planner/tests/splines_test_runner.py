@@ -20,12 +20,12 @@ if __name__ == "__main__":
     # Use 0.25 velocity limits:
     velocity_limits = copy.deepcopy(robot_model.velocity_limits)
     for i, limit in enumerate(velocity_limits):
-        velocity_limits[i] = limit * 0.7
+        velocity_limits[i] = limit * 1.0
 
     # # Standard motion
     # robot_model.move_to_joint_config(start_joint_config)
     # rospy.sleep(2)
-    # executor.run_test(mode="raw", velocity_limits=velocity_limits, velocity_limits=velocity_limits)
+    # executor.run_test(mode="raw", velocity_limits=velocity_limits)
 
     # # Cubic splines
     # robot_model.move_to_joint_config(start_joint_config)

@@ -25,6 +25,8 @@ from control_msgs.msg import FollowJointTrajectoryAction, FollowJointTrajectoryG
 from trajectory_msgs.msg import JointTrajectory
 import subprocess
 
+from moveit_commander import RobotTrajectory
+import copy
 
 class Robot:
     """
@@ -59,13 +61,13 @@ class Robot:
         if urdf_string is not None:
             self.urdf_string = urdf_string
         else:
-            pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner")
+            pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner")
             xacro_path = f"{pkg_root}/panda_description/panda.urdf.xacro"
             self.urdf_string = subprocess.check_output(["xacro", xacro_path]).decode("utf-8")
 
         # Load joint limits
         if joint_limits_path is None:
-            pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner")
+            pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner")
             xacro_path = f"{pkg_root}/panda_description/panda.urdf.xacro"
             joint_limits_path = f"{pkg_root}/config/joint_limits.yaml"
 
@@ -203,6 +205,8 @@ class Robot:
             trajectory: A JointTrajectory message.
         """
         client = actionlib.SimpleActionClient('/position_joint_trajectory_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
+        # client = actionlib.SimpleActionClient('/effort_joint_trajectory_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
+
         client.wait_for_server()
         goal = FollowJointTrajectoryGoal()
         goal.trajectory = trajectory
@@ -211,8 +215,8 @@ class Robot:
 
     def move_to_joint_config(self, joint_config):
         """Move the robot to a specific joint configuration."""
-        self.group.set_max_velocity_scaling_factor(0.7)
-        self.group.set_max_acceleration_scaling_factor(0.7)
+        self.group.set_max_velocity_scaling_factor(0.2)
+        self.group.set_max_acceleration_scaling_factor(0.2)
         self.group.set_joint_value_target(joint_config)
         rospy.loginfo(f"Moving to joint configuration: {joint_config}")
         start_time = time.time()
@@ -235,8 +239,8 @@ class Robot:
 
     def execute_joint_positions(self, joint_positions, method):
         """Execute a joint position command and log the data"""
-        self.group.set_max_velocity_scaling_factor(0.7)
-        self.group.set_max_acceleration_scaling_factor(0.7)
+        self.group.set_max_velocity_scaling_factor(0.2)
+        self.group.set_max_acceleration_scaling_factor(0.2)
         self.group.set_joint_value_target(joint_positions)
         start_time = time.time()
         self.group.go(wait=True)
@@ -268,3 +272,47 @@ class Robot:
             rospy.loginfo("Motion planning successful")
         else:
             rospy.logerr("Motion planning failed")
+
+    def move_cartesian(self, pose: PointWithOrientation):
+        """
+        Move the robot using Cartesian path planning from current to target pose.
+
+        Args:
+            pose: Target pose as PointWithOrientation.
+        """
+        # Convert pose
+        target_pose = geometry_msgs.msg.Pose()
+        target_pose.position.x = pose.x
+        target_pose.position.y = pose.y
+        target_pose.position.z = pose.z
+        quat = tf_trans.quaternion_from_euler(pose.roll, pose.pitch, pose.yaw)
+        target_pose.orientation.x = quat[0]
+        target_pose.orientation.y = quat[1]
+        target_pose.orientation.z = quat[2]
+        target_pose.orientation.w = quat[3]
+
+        waypoints = []
+        waypoints.append(copy.deepcopy(self.moveit_group.get_current_pose().pose))
+        waypoints.append(copy.deepcopy(target_pose))
+
+        (plan, fraction) = self.moveit_group.compute_cartesian_path(
+            waypoints, 0.01  # waypoints to follow  # eef_step
+        )
+
+        print(f"Fraction of path computed: {fraction}")
+        print(f"Number of waypoints: {len(plan.joint_trajectory.points)}")
+
+        # if fraction < 0.99:
+        #     rospy.logwarn(f"Cartesian path only computed {fraction*100:.1f}% of the way.")
+        #     return
+        # else:
+        #     rospy.loginfo("Cartesian path planning successful.")
+
+        # # Assign time_from_start manually
+        # def assign_time_parametrization(trajectory, time_step=0.01):
+        #     time = 0.0
+        #     for point in trajectory.joint_trajectory.points:
+        #         point.time_from_start = rospy.Duration.from_sec(time)
+        #         time += time_step
+
+        self.moveit_group.execute(plan, wait=True)

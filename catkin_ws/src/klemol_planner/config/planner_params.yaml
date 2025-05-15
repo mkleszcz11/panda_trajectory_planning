@@ -12,6 +12,12 @@ rrt_star:
   rewire_radius: 0.3 # PLACEHOLER
   max_time: 25.0 # max time to run the planner (s)
 
+rrt_with_connecting:
+  step_size: 0.1        # step between nodes TODO -> WHAT IS THE UNIT (rad)
+  bias: 0.1  # Probability of sampling the goal (for biasing)
+  max_iterations: 20000
+  max_time: 25.0 # max time to run the planner (s)
+
 prm:
   n_nodes: 1000000        # Number of sampled configurations in the roadmap
   k_neighbors: 10        # Number of neighbors to attempt connecting to
