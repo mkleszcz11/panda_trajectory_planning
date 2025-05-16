@@ -20,8 +20,8 @@ def plot_joint_comparison(data, joint_index=0, velocity_cap=2.6100 * 0.25):
     pos = np.array(positions)[:, joint_index]
     vel = np.array(velocities)[:, joint_index]
 
-    # Cap velocities to avoid unrealistic spikes
-    vel = np.clip(vel, -velocity_cap, velocity_cap)
+    # # Cap velocities to avoid unrealistic spikes
+    # vel = np.clip(vel, -velocity_cap, velocity_cap)
 
     # Calculate acceleration and jerk using Savitzky-Golay filter
     acc, jerk = calculate_acceleration_jerk(time, vel)

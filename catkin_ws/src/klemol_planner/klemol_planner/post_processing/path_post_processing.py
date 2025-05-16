@@ -27,7 +27,7 @@ class PathPostProcessing:
         path: t.List[np.ndarray],
         joint_names: t.List[str],
         velocity_limits: np.ndarray,
-        dt: float = 0.01,
+        dt: float = 0.005,
         safety_margin: float = 0.9
     ) -> JointTrajectory:
         """
@@ -122,7 +122,7 @@ class PathPostProcessing:
             point.time_from_start = rospy.Duration.from_sec(t_val)
             traj_msg.points.append(point)
 
-        traj_msg.header.stamp = rospy.Time.now() + rospy.Duration(0.2)
+        traj_msg.header.stamp = rospy.Time.now() + rospy.Duration(0.5)
 
         return traj_msg
 
@@ -131,7 +131,7 @@ class PathPostProcessing:
         path: t.List[np.ndarray],
         joint_names: t.List[str],
         velocity_limits: np.ndarray,
-        dt: float = 0.01,
+        dt: float = 0.005,
         safety_margin: float = 0.9
     ) -> JointTrajectory:
         """
@@ -209,7 +209,7 @@ class PathPostProcessing:
             point.time_from_start = rospy.Duration.from_sec(t_val)
             traj_msg.points.append(point)
 
-        traj_msg.header.stamp = rospy.Time.now() + rospy.Duration(0.2)
+        traj_msg.header.stamp = rospy.Time.now() + rospy.Duration(0.5)
 
         print("Trajectory starts at:", traj_msg.header.stamp.to_sec())
         print("First point time_from_start:", traj_msg.points[0].time_from_start.to_sec())

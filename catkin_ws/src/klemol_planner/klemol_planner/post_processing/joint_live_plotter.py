@@ -22,7 +22,8 @@ class JointLivePlotter:
         self.joint_index = 0
 
         self.sub = rospy.Subscriber(
-            "/effort_joint_trajectory_controller/state",
+            "/position_joint_trajectory_controller/state",
+            # "/effort_joint_trajectory_controller/state",
             JointTrajectoryControllerState,
             self.callback
         )
