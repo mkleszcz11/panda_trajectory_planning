@@ -4,12 +4,14 @@ import time
 import random
 
 from klemol_planner.planners.base import Planner
-from klemol_planner.environment.robot_model import RobotModel
+from klemol_planner.environment.robot_model import Robot
 from klemol_planner.environment.collision_checker import CollisionChecker
 from klemol_planner.goals.point_with_orientation import PointWithOrientation
 from klemol_planner.planners.nodes import TreeNode
 
 import rospy
+
+from trac_ik_python.trac_ik import IK
 
 class RRTPlanner(Planner):
     """
@@ -20,7 +22,7 @@ class RRTPlanner(Planner):
     """
 
     def __init__(self,
-                 robot_model: RobotModel,
+                 robot_model: Robot,
                  collision_checker: CollisionChecker,
                  parameters: dict):
         """
@@ -52,7 +54,15 @@ class RRTPlanner(Planner):
             raise ValueError("Start configuration and goal pose must be set before planning.")
 
         # Inverse kinematics to find a goal configuration
-        goal_config = self.robot_model.ik(self.goal_pose)
+        # goal_config = self.robot_model.ik(self.goal_pose)
+
+        custom_solver = IK(base_link = self.robot_model.base_link,
+                           tip_link = self.robot_model.ee_link,
+                           urdf_string = self.robot_model.urdf_string,
+                           timeout = 1.0,
+                           solve_type="Distance")
+        # random_seed = np.random.uniform(self.robot_model.lower_bounds, self.robot_model.upper_bounds)
+        goal_config = self.robot_model.ik_with_custom_solver(self.goal_pose, solver = custom_solver)
         if goal_config is None:
             return [], False
 
