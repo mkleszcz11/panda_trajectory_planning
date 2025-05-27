@@ -237,14 +237,28 @@ class FrankaMotionController:
         ### Close gripper
         self.robot_model.close_gripper()
 
-        ### Move above box 1
-        point_more_above_an_object = deepcopy(self.point_above_object_in_base_frame)
-        
-        point_more_above_an_object.x += 0.05
-        point_more_above_an_object.y += 0.05
-        point_more_above_an_object.z += 0.05
+        ### Build waypoints before moving above the box
+        waypoint_1 = deepcopy(self.object_in_base_frame)
+        waypoint_1.z += 0.05 
 
-        pre_start_path = [self.point_above_object_in_base_frame, point_more_above_an_object]
+        waypoint_2 = deepcopy(self.object_in_base_frame)
+
+        # Find direction
+        dx = self.point_above_box1_in_base_frame.x - self.object_in_base_frame.x
+        dy = self.point_above_box1_in_base_frame.y - self.object_in_base_frame.y
+        distance = math.hypot(dx, dy)  # sqrt(dx^2 + dy^2)
+        dx_unit = dx / distance
+        dy_unit = dy / distance
+        step_size = 0.05
+        new_x = self.object_in_base_frame.x + dx_unit * step_size
+        new_y = self.object_in_base_frame.y + dy_unit * step_size
+
+        waypoint_2.x += new_x
+        waypoint_2.y += new_y
+        waypoint_2.z = waypoint_1.z + step_size
+
+        pre_start_path = [waypoint_1, waypoint_2]
+
         self.robot_model.move_with_trajectory_planner(planner = self.custom_planner,
                                                       post_processing = self.post_processing,
                                                       goal = self.point_above_box1_in_base_frame,
