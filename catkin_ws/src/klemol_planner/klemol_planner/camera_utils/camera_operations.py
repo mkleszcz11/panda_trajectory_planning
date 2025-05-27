@@ -676,7 +676,7 @@ class CameraOperations:
         except Exception:
             return 0.0, 0.0, 0.0
 
-    def find_grasp(self, object_to_find: str = "banana", timeout: float = 10.0) -> t.List:
+    def find_grasp(self, object_to_find: str = "sports ball", timeout: float = 10.0) -> t.List:
         """
         TODO
         Return success, x, y, z, rotation
@@ -699,12 +699,12 @@ class CameraOperations:
             print(f"CUDA GPU detected: {torch.cuda.get_device_name(0)}")
             device = 'cuda'
 
-        print(f"Loading YOLOv8 Segmentation model onto {device.upper()}...")
+        print(f"Loading YOLO Segmentation model onto {device.upper()}...")
         try:
-            model = YOLO('yolov8l-seg.pt')  # Or your preferred model
+            model = YOLO("yolov8x-seg.pt")  # Or your preferred model
             model.to(device)
             coco_names = model.names
-            print("YOLOv8 model loaded.")
+            print("YOLO model loaded.")
         except Exception as e:
             print(f"Error loading YOLO model: {e}.")
             if pipeline: pipeline.stop()
@@ -729,7 +729,7 @@ class CameraOperations:
             width_favor_narrow_weight=GRASP_WIDTH_FAVOR_NARROW_WEIGHT
         )
         print("Antipodal Grasp Planner initialized.")
-        TARGET_CLASS_NAME = "banana"  # Change to your target: "cell phone", "cup", etc.
+        TARGET_CLASS_NAME = "sports ball"  # Change to your target: "cell phone", "cup", etc.
 
         confidence_threshold = 0.5
         output_folder = f"live_{TARGET_CLASS_NAME.replace(' ', '_')}_grasps_tracked"

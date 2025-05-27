@@ -22,12 +22,16 @@ from klemol_planner.post_processing.path_post_processing import PathPostProcessi
 import math
 import subprocess
 
+from copy import deepcopy
+
 from klemol_planner.environment.robot_model import Robot
 from klemol_planner.environment.collision_checker import CollisionChecker
 from klemol_planner.planners.rrt import RRTPlanner
 from klemol_planner.planners.rrt_star import RRTStarPlanner
 from klemol_planner.planners.rrt_with_connecting import RRTWithConnectingPlanner
 from klemol_planner.utils.config_loader import load_planner_params
+from klemol_planner.tests.trajectory_logger import TrajectoryLogger
+from control_msgs.msg import JointTrajectoryControllerState
 
 import copy
 import actionlib
@@ -38,6 +42,7 @@ from klemol_planner.camera_utils.camera_operations import CameraOperations
 class FrankaMotionController:
     def __init__(self):
         rospy.init_node("franka_motion_controller")
+        self.logger = TrajectoryLogger()
 
         ##################################
         ## MOVEIT STUFF - TO BE REMOVED ##
@@ -49,16 +54,19 @@ class FrankaMotionController:
 
         # Initialize robot model and collision checker
         self.collision_checker = CollisionChecker(self.robot_model, group_name="panda_arm")
+        self.post_processing = PathPostProcessing(collision_checker=self.collision_checker)
+
 
         # Load RRT-specific parameters from config
-        algorithm = "rrt" #"rrt" / "rrt_star" / "rrt_with_connecting" / "prm"
+        algorithm = "rrt_with_connecting" #"rrt" / "rrt_star" / "rrt_with_connecting" / "prm"
         algorithm_params = load_planner_params(algorithm)
-        self.custom_planner = RRTPlanner(self.robot_model, self.collision_checker, algorithm_params)
+        # self.custom_planner = RRTPlanner(self.robot_model, self.collision_checker, algorithm_params)
         # self.custom_planner = RRTStarPlanner(self.robot_model, self.collision_checker, algorithm_params)
-        # self.custom_planner = RRTWithConnectingPlanner(self.robot_model, self.collision_checker, algorithm_params)
+        self.custom_planner = RRTWithConnectingPlanner(self.robot_model, self.collision_checker, algorithm_params)
 
         # REBASE
-        self.start_joint_config = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]  # Joint angles in radians
+        self.start_joint_config = [0, -0.785, 0, -2.356, 0, 1.571, 0.785 - math.pi / 2.0]  # Joint angles in radians
+        self.robot_model.open_gripper()
         self.robot_model.move_to_joint_config(self.start_joint_config)
 
         camera_operations = CameraOperations()
@@ -175,57 +183,77 @@ class FrankaMotionController:
         # Visualise
         # panda_transformations.visusalise_environment(visualisation_frames)
 
-    # def move_with_trajectory_planner(self, ):
-        
+    # def move_with_trajectory_planner(self, goal):
+    #     current_config = np.array(self.robot_model.group.get_current_joint_values())
+    #     self.custom_planner.set_start(current_config)
+    #     self.custom_planner.set_goal(goal)
+    #     path, success = self.custom_planner.plan()
+
+    #     #### Call shortcutting function (edit path)
+    #     path_post_processing = PathPostProcessing(self.collision_checker)
+    #     # path = path_post_processing.generate_a_shortcutted_path(path)
+
+    #     ### 
+    #     if success:
+    #         rospy.loginfo(f"Planner found path with {len(path)} waypoints.")
+    #         rospy.loginfo(f"Fitting spline to the path...")
+    #         # Smooth the path and execute smooth trajectory
+    #         trajectory = path_post_processing.interpolate_quintic_trajectory(
+    #             path=path,
+    #             joint_names=self.robot_model.group.get_active_joints(),
+    #             velocity_limits=self.robot_model.velocity_limits,
+    #             acceleration_limits=self.robot_model.acceleration_limits,
+    #             max_vel_acc_multiplier = 0.6
+    #             )
+    #         self.robot_model.send_trajectory_to_controller(trajectory)
+    #     else:
+    #         rospy.logwarn("RRT planner failed to find a path.")
 
     def execute(self):
         """Main execution sequence"""
         rospy.loginfo("Returning to Start Joint Configuration after execution")
         self.robot_model.move_to_joint_config(self.start_joint_config)
+        self.logger_sub = rospy.Subscriber(
+            "/position_joint_trajectory_controller/state",
+            JointTrajectoryControllerState,
+            self.logger.callback,
+        )
 
         ### Open gripper
-        self.robot_model.move_gripper(True)
+        self.robot_model.open_gripper()
 
-        #### Move above the object
-        current_config = np.array(self.robot_model.group.get_current_joint_values())
-        self.custom_planner.set_start(current_config)
-        self.custom_planner.set_goal(self.point_above_object_in_base_frame)
-        path, success = self.custom_planner.plan()
+        self.logger.set_mode("Picking banana quintic | RRT with shortcutting")
 
-        #### Call shortcutting function (edit path)
-        path_post_processing = PathPostProcessing(self.collision_checker)
-        # path = path_post_processing.generate_a_shortcutted_path(path)
+        # #### Move above the object
+        # self.move_with_trajectory_planner(self.point_above_object_in_base_frame)
 
-        ### 
-        if success:
-            rospy.loginfo(f"Planner found path with {len(path)} waypoints.")
-            rospy.loginfo(f"Fitting spline to the path...")
-            # Smooth the path and execute smooth trajectory
-            trajectory = path_post_processing.interpolate_quintic_trajectory(
-                path=path,
-                joint_names=self.robot_model.group.get_active_joints(),
-                velocity_limits=self.robot_model.velocity_limits,
-                acceleration_limits=self.robot_model.acceleration_limits,
-                max_vel_acc_multiplier = 1.0
-                )
-            self.robot_model.send_trajectory_to_controller(trajectory)
-        else:
-            rospy.logwarn("RRT planner failed to find a path.")
-
-        ### Move to the object in a little bit more straight line
-        self.robot_model.move_to_pose_planner(self.object_in_base_frame)
+        ### Move to the object, last part straightish
+        post_goal_path = [self.object_in_base_frame]
+        self.robot_model.move_with_trajectory_planner(planner = self.custom_planner,
+                                                      post_processing = self.post_processing,
+                                                      goal = self.point_above_object_in_base_frame,
+                                                      post_goal_path = post_goal_path)
 
         ### Close gripper
-        self.robot_model.move_gripper(False)
-
-        ### Move back up
-        self.robot_model.move_to_pose_planner(self.point_above_object_in_base_frame)
+        self.robot_model.close_gripper()
 
         ### Move above box 1
-        self.robot_model.move_to_pose_planner(self.point_above_box1_in_base_frame)
+        point_more_above_an_object = deepcopy(self.point_above_object_in_base_frame)
+        
+        point_more_above_an_object.x += 0.05
+        point_more_above_an_object.y += 0.05
+        point_more_above_an_object.z += 0.05
+
+        pre_start_path = [self.point_above_object_in_base_frame, point_more_above_an_object]
+        self.robot_model.move_with_trajectory_planner(planner = self.custom_planner,
+                                                      post_processing = self.post_processing,
+                                                      goal = self.point_above_box1_in_base_frame,
+                                                      pre_start_path = pre_start_path)
 
         ### Open gripper
-        self.robot_model.move_gripper(True)
+        self.robot_model.open_gripper
+
+        self.logger.save("/tmp/pick_banana_demo.npz")
 
 
 if __name__ == "__main__":

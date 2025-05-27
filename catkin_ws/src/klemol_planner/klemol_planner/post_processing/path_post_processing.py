@@ -1,7 +1,6 @@
 import numpy as np
 import typing as t
 
-from klemol_planner.environment.robot_model import Robot
 from klemol_planner.environment.collision_checker import CollisionChecker
 from klemol_planner.environment.robot_joint_states_reader import JointStatesReader
 from klemol_planner.environment.robot_joint_states_reader import JointStatesReader
@@ -60,7 +59,7 @@ class PathPostProcessing:
         qdot_current = joint_reader.get_current_velocities()
 
         # Combine initial position with path
-        q = np.array([q_current] + list(path))
+        q = np.array(list(path))
         n_waypoints = len(q)
         n_joints = len(joint_names)
 

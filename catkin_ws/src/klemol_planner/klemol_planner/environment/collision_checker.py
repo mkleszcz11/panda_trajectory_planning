@@ -3,7 +3,7 @@ import numpy as np
 import rospy
 import moveit_commander
 
-from klemol_planner.environment.robot_model import Robot
+# from klemol_planner.environment.robot_model import Robot
 
 class CollisionChecker:
     """
@@ -13,7 +13,7 @@ class CollisionChecker:
     in a collision using the current MoveIt planning scene.
     """
 
-    def __init__(self, robot_model: Robot, group_name: str = "panda_arm"):
+    def __init__(self, robot_model, group_name: str = "panda_arm"):
         """
         Initialize the collision checker.
 

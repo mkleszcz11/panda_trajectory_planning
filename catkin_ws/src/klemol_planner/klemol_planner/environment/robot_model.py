@@ -27,6 +27,9 @@ import subprocess
 
 from moveit_commander import RobotTrajectory
 import copy
+# from klemol_planner.post_processing.path_post_processing import PathPostProcessing
+# from klemol_planner.planners.base import Planner
+
 
 class Robot:
     """
@@ -168,7 +171,7 @@ class Robot:
             yaw=yaw
         )
     
-    def move_gripper(self, open: bool = True):
+    def _move_gripper(self, open: bool = True):
         """
         Open or close the gripper.
 
@@ -190,13 +193,180 @@ class Robot:
             client.wait_for_server()
 
             goal = GraspGoal()
-            goal.width = 0.00     # fully closed
+            goal.width = 0.065     # fully closed
             goal.speed = 0.1
-            goal.force = 30.0     # closing force (adjust based on object)
-            goal.epsilon.inner = 0.005
-            goal.epsilon.outer = 0.005
+            goal.force = 50.0     # closing force (adjust based on object)
+            goal.epsilon.inner = 0.08
+            goal.epsilon.outer = 0.08
             client.send_goal(goal)
             client.wait_for_result()
+
+    def close_gripper(self):
+        self._move_gripper(False)
+
+    def open_gripper(self):
+        self._move_gripper(True)
+
+    def move_with_trajectory_planner(self,
+                                     planner,
+                                     post_processing,
+                                     goal: PointWithOrientation,
+                                     post_goal_path: list=None,
+                                     pre_start_path: list=None):
+        """
+        Move to the goal using a defined planer. If post goal path is specified it will be added to the path
+        that leads to the goal.
+
+        Params:
+            planner: planner object instance
+            goal: Goal pose
+            post_goal_path: List of waypoints to append after reaching a goal
+        """
+        path = []
+        current_config = np.array(self.group.get_current_joint_values())
+
+        path.append(current_config)
+
+        ik_solver = IK(
+            base_link=self.base_link,
+            tip_link=self.ee_link,
+            urdf_string=self.urdf_string,
+            timeout=0.2,
+            solve_type="Distance",
+        )
+
+        ### PRE START PATH ###
+        if pre_start_path:
+            for waypoint in pre_start_path:
+                seed = path[-1]
+                pose_to_append = self.ik_with_custom_solver(
+                    pose = waypoint,
+                    solver=ik_solver,
+                    seed=seed
+                )
+                path.append(pose_to_append)
+
+        planner.set_start(path[-1])
+        planner.set_goal(goal)
+        planned_path, success = planner.plan()
+        path += planned_path
+
+        ### ADDING INTERMEDIATE NODES UP TO THE OBJECT ###
+        if post_goal_path:
+            for waypoint in post_goal_path:
+                seed = path[-1]
+                pose_to_append = self.ik_with_custom_solver(
+                    pose = waypoint,
+                    solver=ik_solver,
+                    seed=seed
+                )
+                path.append(pose_to_append)
+
+        #### Call shortcutting function (edit path)
+        path_post_processing = post_processing
+        # path = path_post_processing.generate_a_shortcutted_path(path)
+
+        ### 
+        if success:
+            rospy.loginfo(f"Planner found path with {len(path)} waypoints.")
+            rospy.loginfo(f"Fitting spline to the path...")
+            # Smooth the path and execute smooth trajectory
+            trajectory = path_post_processing.interpolate_quintic_trajectory(
+                path=path,
+                joint_names=self.group.get_active_joints(),
+                velocity_limits=self.velocity_limits,
+                acceleration_limits=self.acceleration_limits,
+                max_vel_acc_multiplier = 0.3
+                )
+            self.send_trajectory_to_controller(trajectory)
+        else:
+            rospy.logwarn("RRT planner failed to find a path.")
+
+
+
+
+
+    # def move_with_trajectory_planner(self, planner, post_processing, goal: PointWithOrientation, post_goal_path: list=None, pre_start_path: list=None):
+    #     """
+    #     Move to the goal using a defined planer. If post goal path is specified it will be added to the path
+    #     that leads to the goal.
+
+    #     Params:
+    #         planner: planner object instance
+    #         post_processing: post processing object instance
+    #         goal: Goal pose
+    #         post_goal_path: List of waypoints to append after reaching a goal, computed with TRACK-IK to minimize square error.
+    #         pre_start_path: List of waypoint to add before starting a planner, computed with TRACK-IK to minimize square error.
+    #     """
+    #     path = []
+    #     current_config = np.array(self.group.get_current_joint_values())
+
+    #     ### PRE START PATH ###
+    #     if pre_start_path:
+    #         for waypoint in post_goal_path:
+    #             ik_solver = IK(
+    #                 base_link=self.base_link,
+    #                 tip_link=self.ee_link,
+    #                 urdf_string=self.urdf_string,
+    #                 timeout=0.1,
+    #                 solve_type="Distance",
+    #             )
+    #             seed = path[-1]
+    #             pose_to_append = self.ik_with_custom_solver(
+    #                 pose = waypoint,
+    #                 solver=ik_solver,
+    #                 seed=seed
+    #             )
+    #             path.append(pose_to_append)
+
+    #     if not path:
+    #         print(f"ADDING CURRENT CONFIG TO THE LIST")
+    #         path.append(current_config)
+
+    #     planner.set_start(path[-1])
+    #     planner.set_goal(goal)
+    #     main_path, success = planner.plan()
+    #     path.append(main_path)
+
+    #     ### POST GOAL PATH ###
+    #     if post_goal_path:
+    #         for waypoint in post_goal_path:
+    #             ik_solver = IK(
+    #                 base_link=self.base_link,
+    #                 tip_link=self.ee_link,
+    #                 urdf_string=self.urdf_string,
+    #                 timeout=0.1,
+    #                 solve_type="Distance",
+    #             )
+    #             seed = path[-1]
+    #             pose_to_append = self.ik_with_custom_solver(
+    #                 pose = waypoint,
+    #                 solver=ik_solver,
+    #                 seed=seed
+    #             )
+    #             path.append(pose_to_append)
+
+    #     #### Call shortcutting function (edit path)
+    #     path_post_processing = post_processing
+    #     # path = path_post_processing.generate_a_shortcutted_path(path)
+
+    #     ### 
+    #     if success:
+    #         rospy.loginfo(f"Planner found path with {len(path)} waypoints.")
+    #         rospy.loginfo(f"Fitting spline to the path...")
+    #         # Smooth the path and execute smooth trajectory
+    #         trajectory = path_post_processing.interpolate_quintic_trajectory(
+    #             path=path,
+    #             joint_names=self.group.get_active_joints(),
+    #             velocity_limits=self.velocity_limits,
+    #             acceleration_limits=self.acceleration_limits,
+    #             max_vel_acc_multiplier = 0.1
+    #             )
+    #         self.send_trajectory_to_controller(trajectory)
+    #     else:
+    #         rospy.logwarn("RRT planner failed to find a path.")
+
+
 
     def send_trajectory_to_controller(self, trajectory: JointTrajectory):
         """

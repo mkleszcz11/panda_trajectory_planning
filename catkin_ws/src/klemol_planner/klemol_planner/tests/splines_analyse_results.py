@@ -61,7 +61,7 @@ def plot_all_joints(data):
     plt.show()  # Show all the figures at once
 
 if __name__ == "__main__":
-    file_path = "/tmp/franka_motion_comparison.npz"
+    file_path = "/tmp/pick_banana_demo.npz"
     data = np.load(file_path)
 
     plot_all_joints(data)

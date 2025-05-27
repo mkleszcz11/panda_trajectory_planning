@@ -218,7 +218,7 @@ class RRTWithConnectingPlanner(Planner):
         """
         goal_configs: t.List[np.ndarray] = []
         seed_attempts = 0
-        max_attempts = self.max_goal_samples * 5
+        max_attempts = self.max_goal_samples
         threshold = 1e-2  # Joint-space uniqueness threshold
 
         ik_solver = IK(
