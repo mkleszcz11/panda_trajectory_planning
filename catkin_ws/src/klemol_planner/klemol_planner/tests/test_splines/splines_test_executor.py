@@ -10,14 +10,14 @@ import math
 from trac_ik_python.trac_ik import IK
 
 
-class TestExecutor:
+class SplinesTestExecutor:
     def __init__(self, collision_checker: CollisionChecker, logger):
         self.robot_model = collision_checker.robot_model
         self.collision_checker = collision_checker
         self.logger = logger
         self.logger_sub = rospy.Subscriber(
-            "/position_joint_trajectory_controller/state",
-            # "/effort_joint_trajectory_controller/state",
+            # "/position_joint_trajectory_controller/state",
+            "/effort_joint_trajectory_controller/state",
             JointTrajectoryControllerState,
             self.logger.callback,
         )

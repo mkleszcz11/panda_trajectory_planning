@@ -3,8 +3,6 @@ import numpy as np
 import rospy
 import moveit_commander
 
-# from klemol_planner.environment.robot_model import Robot
-
 class CollisionChecker:
     """
     Collision checker using MoveIt for self-collision and environment collision checking.
@@ -13,7 +11,7 @@ class CollisionChecker:
     in a collision using the current MoveIt planning scene.
     """
 
-    def __init__(self, robot_model, group_name: str = "panda_arm"):
+    def __init__(self, group_name: str = "panda_arm"):
         """
         Initialize the collision checker.
 
@@ -21,7 +19,6 @@ class CollisionChecker:
             group_name: Name of the MoveIt planning group.
         """
         moveit_commander.roscpp_initialize([])
-        self.robot_model = robot_model
         self.scene = moveit_commander.PlanningSceneInterface()
         self.group = moveit_commander.MoveGroupCommander(group_name)
         self.group.set_planning_time(0.5)

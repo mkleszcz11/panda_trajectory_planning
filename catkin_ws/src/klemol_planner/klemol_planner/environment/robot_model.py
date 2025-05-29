@@ -13,7 +13,7 @@ import geometry_msgs.msg
 import os
 from trac_ik_python.trac_ik import IK
 from klemol_planner.goals.point_with_orientation import PointWithOrientation
-
+from klemol_planner.environment.collision_checker import CollisionChecker
 import rospy
 import moveit_commander
 from geometry_msgs.msg import Pose
@@ -29,6 +29,21 @@ from moveit_commander import RobotTrajectory
 import copy
 # from klemol_planner.post_processing.path_post_processing import PathPostProcessing
 # from klemol_planner.planners.base import Planner
+# from moveit_commander import RobotModel
+from moveit_commander import RobotState, RobotCommander
+from geometry_msgs.msg import Pose
+
+import PyKDL as kdl
+from urdf_parser_py.urdf import URDF
+from kdl_parser_py.urdf import treeFromUrdfModel
+import re
+
+import rospy
+from moveit_msgs.srv import GetPositionFK, GetPositionFKRequest
+from sensor_msgs.msg import JointState
+from geometry_msgs.msg import PoseStamped
+from klemol_planner.goals.point_with_orientation import PointWithOrientation
+from tf.transformations import euler_from_quaternion
 
 
 class Robot:
@@ -64,13 +79,13 @@ class Robot:
         if urdf_string is not None:
             self.urdf_string = urdf_string
         else:
-            pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner")
+            pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner")
             xacro_path = f"{pkg_root}/panda_description/panda.urdf.xacro"
             self.urdf_string = subprocess.check_output(["xacro", xacro_path]).decode("utf-8")
 
         # Load joint limits
         if joint_limits_path is None:
-            pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner")
+            pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner")
             xacro_path = f"{pkg_root}/panda_description/panda.urdf.xacro"
             joint_limits_path = f"{pkg_root}/config/joint_limits.yaml"
 
@@ -99,6 +114,25 @@ class Robot:
         
     def get_current_joint_values(self):
         return self.moveit_group.get_current_joint_values()
+
+
+    def sample_random_valid_configuration(self, collision_checker: CollisionChecker) -> np.ndarray:
+        """
+        Sample a random joint configuration within joint limits that is collision-free
+        and kinematically feasible.
+
+        Returns:
+            Random joint configuration (7D np.ndarray)
+        """
+        max_attempts = 100
+        for _ in range(max_attempts):
+            config = self.sample_random_configuration()
+
+            if collision_checker.is_in_collision:
+                return config
+        
+        raise RuntimeError(f"Could not find a valid configuration in {max_attempts} attempts.")
+
 
     def sample_random_configuration(self) -> np.ndarray:
         """
@@ -139,37 +173,54 @@ class Robot:
     def ik_with_custom_solver(self, pose: PointWithOrientation, solver: IK, seed: np.ndarray = None) -> t.Optional[np.ndarray]:
         quaternion = pose.to_quaternion()
         if seed is None:
-            seed = self.sample_random_configuration()
+            seed = self.group.get_current_joint_values()
+            # seed = self.sample_random_configuration()
         sol = solver.get_ik(seed, pose.x, pose.y, pose.z, *quaternion)
         return np.array(sol) if sol is not None else None
 
-    def fk(self, config: np.ndarray) -> t.Optional[PointWithOrientation]:
+
+    def fk(self, config: np.ndarray) -> PointWithOrientation:
         """
-        Compute the forward kinematics using MoveIt Commander. Do it for simplicity,
-        might be slow but should be easy to debug.
+        Compute FK using MoveIt's compute_fk service (official, stable).
 
         Args:
-            config: Joint angles (7D array)
+            config: Joint angles (7D np.ndarray)
 
-        Return:
-            Pose of the end effector as PointWithOrientation.
+        Returns:
+            Pose of end effector as PointWithOrientation.
         """
-        self.moveit_group.set_joint_value_target(config.tolist())
-        pose: Pose = self.moveit_group.get_current_pose().pose
+        rospy.wait_for_service('/compute_fk')
+        fk_service = rospy.ServiceProxy('/compute_fk', GetPositionFK)
+        
+        fk_request = GetPositionFKRequest()
+        fk_request.header.frame_id = self.base_link
+        fk_request.fk_link_names = [self.ee_link]
 
-        # Convert quaternion to roll, pitch, yaw
-        quat = [pose.orientation.x, pose.orientation.y,
-                pose.orientation.z, pose.orientation.w]
-        roll, pitch, yaw = euler_from_quaternion(quat)
+        joint_state = JointState()
+        joint_state.name = self.moveit_group.get_active_joints()
+        joint_state.position = config.tolist()
+        fk_request.robot_state.joint_state = joint_state
 
-        return PointWithOrientation(
-            x=pose.position.x,
-            y=pose.position.y,
-            z=pose.position.z,
-            roll=roll,
-            pitch=pitch,
-            yaw=yaw
-        )
+        try:
+            response = fk_service.call(fk_request)
+            if not response.error_code.val == response.error_code.SUCCESS:
+                raise RuntimeError(f"FK failed: {response.error_code.val}")
+
+            pose: PoseStamped = response.pose_stamped[0]
+            quat = [pose.pose.orientation.x, pose.pose.orientation.y, pose.pose.orientation.z, pose.pose.orientation.w]
+            roll, pitch, yaw = euler_from_quaternion(quat)
+
+            return PointWithOrientation(
+                x=pose.pose.position.x,
+                y=pose.pose.position.y,
+                z=pose.pose.position.z,
+                roll=roll,
+                pitch=pitch,
+                yaw=yaw
+            )
+        except rospy.ServiceException as e:
+            raise RuntimeError(f"Service call failed: {e}")
+
     
     def _move_gripper(self, open: bool = True):
         """
@@ -209,8 +260,8 @@ class Robot:
 
     def move_with_trajectory_planner(self,
                                      planner,
-                                     post_processing,
                                      goal: PointWithOrientation,
+                                     post_processing = None,
                                      post_goal_path: list=None,
                                      pre_start_path: list=None):
         """
@@ -263,15 +314,11 @@ class Robot:
                 path.append(pose_to_append)
 
         #### Call shortcutting function (edit path)
-        path_post_processing = post_processing
-        # path = path_post_processing.generate_a_shortcutted_path(path)
-
-        ### 
         if success:
             rospy.loginfo(f"Planner found path with {len(path)} waypoints.")
             rospy.loginfo(f"Fitting spline to the path...")
             # Smooth the path and execute smooth trajectory
-            trajectory = path_post_processing.interpolate_quintic_trajectory(
+            trajectory = post_processing.interpolate_quintic_trajectory(
                 path=path,
                 joint_names=self.group.get_active_joints(),
                 velocity_limits=self.velocity_limits,
@@ -280,7 +327,7 @@ class Robot:
                 )
             self.send_trajectory_to_controller(trajectory)
         else:
-            rospy.logwarn("RRT planner failed to find a path.")
+            rospy.logwarn("Planner failed to find a path.")
 
 
 
@@ -375,8 +422,8 @@ class Robot:
         Args:
             trajectory: A JointTrajectory message.
         """
-        client = actionlib.SimpleActionClient('/position_joint_trajectory_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
-        # client = actionlib.SimpleActionClient('/effort_joint_trajectory_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
+        # client = actionlib.SimpleActionClient('/position_joint_trajectory_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
+        client = actionlib.SimpleActionClient('/effort_joint_trajectory_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
 
         client.wait_for_server()
         goal = FollowJointTrajectoryGoal()

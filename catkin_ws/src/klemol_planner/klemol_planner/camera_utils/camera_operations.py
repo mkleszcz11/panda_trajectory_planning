@@ -40,7 +40,7 @@ class CameraOperations:
         Initialize the RealSense D435i camera and align depth to color stream.
         If no camera is present (USE_REALSENSE = False), fallback to hardcoded intrinsics.
         """
-        self.USE_REALSENSE = True  # Toggle to False if no camera is connected
+        self.USE_REALSENSE = False  # Toggle to False if no camera is connected
 
         if self.USE_REALSENSE:
             self.pipeline = rs.pipeline()

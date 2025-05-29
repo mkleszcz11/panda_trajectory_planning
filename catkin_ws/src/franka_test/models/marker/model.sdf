@@ -24,7 +24,7 @@
         </geometry>
         <material>
           <texture>
-            <diffuse>file:///home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/franka_test/models/marker/materials/textures/marker_0.jpg</diffuse>
+            <diffuse>file:///home/marcin/panda_trajectory_planning/catkin_ws/src/franka_test/models/marker/materials/textures/marker_0.jpg</diffuse>
           </texture>
           <ambient>1.0 1.0 1.0 1.0</ambient>
           <diffuse>1.0 1.0 1.0 1.0</diffuse>
