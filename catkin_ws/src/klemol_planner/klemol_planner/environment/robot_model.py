@@ -18,6 +18,7 @@ import rospy
 import moveit_commander
 from geometry_msgs.msg import Pose
 from tf.transformations import euler_from_quaternion
+from klemol_planner.tests.main_test_logger import MainTestLogger
 
 import actionlib
 from franka_gripper.msg import GraspAction, GraspGoal, MoveAction, MoveGoal
@@ -178,7 +179,6 @@ class Robot:
         sol = solver.get_ik(seed, pose.x, pose.y, pose.z, *quaternion)
         return np.array(sol) if sol is not None else None
 
-
     def fk(self, config: np.ndarray) -> PointWithOrientation:
         """
         Compute FK using MoveIt's compute_fk service (official, stable).
@@ -263,7 +263,8 @@ class Robot:
                                      goal: PointWithOrientation,
                                      post_processing = None,
                                      post_goal_path: list=None,
-                                     pre_start_path: list=None):
+                                     pre_start_path: list=None,
+                                     logger: MainTestLogger= None):
         """
         Move to the goal using a defined planer. If post goal path is specified it will be added to the path
         that leads to the goal.
@@ -313,6 +314,9 @@ class Robot:
                 )
                 path.append(pose_to_append)
 
+        logger.planning_time = logger.stop_timer()
+        logger.number_of_waypoints_before_post_processing = len(path)
+
         #### Call shortcutting function (edit path)
         if success:
             rospy.loginfo(f"Planner found path with {len(path)} waypoints.")
@@ -328,92 +332,6 @@ class Robot:
             self.send_trajectory_to_controller(trajectory)
         else:
             rospy.logwarn("Planner failed to find a path.")
-
-
-
-
-
-    # def move_with_trajectory_planner(self, planner, post_processing, goal: PointWithOrientation, post_goal_path: list=None, pre_start_path: list=None):
-    #     """
-    #     Move to the goal using a defined planer. If post goal path is specified it will be added to the path
-    #     that leads to the goal.
-
-    #     Params:
-    #         planner: planner object instance
-    #         post_processing: post processing object instance
-    #         goal: Goal pose
-    #         post_goal_path: List of waypoints to append after reaching a goal, computed with TRACK-IK to minimize square error.
-    #         pre_start_path: List of waypoint to add before starting a planner, computed with TRACK-IK to minimize square error.
-    #     """
-    #     path = []
-    #     current_config = np.array(self.group.get_current_joint_values())
-
-    #     ### PRE START PATH ###
-    #     if pre_start_path:
-    #         for waypoint in post_goal_path:
-    #             ik_solver = IK(
-    #                 base_link=self.base_link,
-    #                 tip_link=self.ee_link,
-    #                 urdf_string=self.urdf_string,
-    #                 timeout=0.1,
-    #                 solve_type="Distance",
-    #             )
-    #             seed = path[-1]
-    #             pose_to_append = self.ik_with_custom_solver(
-    #                 pose = waypoint,
-    #                 solver=ik_solver,
-    #                 seed=seed
-    #             )
-    #             path.append(pose_to_append)
-
-    #     if not path:
-    #         print(f"ADDING CURRENT CONFIG TO THE LIST")
-    #         path.append(current_config)
-
-    #     planner.set_start(path[-1])
-    #     planner.set_goal(goal)
-    #     main_path, success = planner.plan()
-    #     path.append(main_path)
-
-    #     ### POST GOAL PATH ###
-    #     if post_goal_path:
-    #         for waypoint in post_goal_path:
-    #             ik_solver = IK(
-    #                 base_link=self.base_link,
-    #                 tip_link=self.ee_link,
-    #                 urdf_string=self.urdf_string,
-    #                 timeout=0.1,
-    #                 solve_type="Distance",
-    #             )
-    #             seed = path[-1]
-    #             pose_to_append = self.ik_with_custom_solver(
-    #                 pose = waypoint,
-    #                 solver=ik_solver,
-    #                 seed=seed
-    #             )
-    #             path.append(pose_to_append)
-
-    #     #### Call shortcutting function (edit path)
-    #     path_post_processing = post_processing
-    #     # path = path_post_processing.generate_a_shortcutted_path(path)
-
-    #     ### 
-    #     if success:
-    #         rospy.loginfo(f"Planner found path with {len(path)} waypoints.")
-    #         rospy.loginfo(f"Fitting spline to the path...")
-    #         # Smooth the path and execute smooth trajectory
-    #         trajectory = path_post_processing.interpolate_quintic_trajectory(
-    #             path=path,
-    #             joint_names=self.group.get_active_joints(),
-    #             velocity_limits=self.velocity_limits,
-    #             acceleration_limits=self.acceleration_limits,
-    #             max_vel_acc_multiplier = 0.1
-    #             )
-    #         self.send_trajectory_to_controller(trajectory)
-    #     else:
-    #         rospy.logwarn("RRT planner failed to find a path.")
-
-
 
     def send_trajectory_to_controller(self, trajectory: JointTrajectory):
         """

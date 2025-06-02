@@ -33,7 +33,9 @@ class PlannersTestExecutor:
         )
 
     def run_test(self,
+                 test_name: str,
                  planner_type: str,
+                 planner_params: dict,
                  start_joint_config: np.ndarray,
                  goal_end_effector_pose: PointWithOrientation,
                  velocity_limits: np.ndarray = np.ones(7)):
@@ -42,29 +44,34 @@ class PlannersTestExecutor:
 
         ### Test setup
         self.logger.reset()
-        self.logger.set_planner(planner_type)
-        planner = self._return_new_planner(planner_type)
+        self.logger.set_planner(test_name)
+        planner = self._return_new_planner(planner_type, planner_params)
 
         ### Move robot to start configuration
         self.robot_model.move_to_joint_config(start_joint_config)
         rospy.sleep(1)  # Allow the robot to stabilize
 
-
         ### Set up the planner and execute the path
         # planner.set_start(start_joint_config)
         # planner.set_goal(goal_end_effector_pose)
         self.logger.start_timer()
+        self.logger.activate()
         self.robot_model.move_with_trajectory_planner(planner = planner,
                                                       post_processing=self.post_processing,
-                                                      goal = goal_end_effector_pose)
+                                                      goal = goal_end_effector_pose,
+                                                      logger = self.logger)
 
+        self.logger.deactivate()
         rospy.sleep(1.0)  # Let the robot stabilize after each move
 
-    def _return_new_planner(self, planner_type: str):
+        # Compute execution metrics (callback collected data during movement)
+        self.logger.compute_metrics()
+
+    def _return_new_planner(self, planner_type: str, params: dict):
         """
         Returns a new planner instance based on the planner type.
         """
-        params = load_planner_params(planner_name=planner_type)
+        # params = load_planner_params(planner_name=planner_type, config_path="test_planner_params.yaml")
 
         if planner_type == "rrt":
             from klemol_planner.planners.rrt import RRTPlanner

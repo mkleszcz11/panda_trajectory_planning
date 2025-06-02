@@ -1,0 +1,39 @@
+# rrt_1:
+#   planner_type: "rrt"      # step between nodes TODO -> WHAT IS THE UNIT (rad)
+#   planner_params:
+#     bias: 0.2  # Probability of sampling the goal (for biasing)
+#     max_iterations: 20000
+#     max_time: 25.0 # max time to run the planner (s)
+
+# rrt_2:
+#   planner_type: "rrt"
+#   planner_params:
+#     step_size: 0.6 # step between nodes TODO -> WHAT IS THE UNIT (rad)
+#     bias: 0.6  # Probability of sampling the goal (for biasing)
+#     max_iterations: 20000
+#     max_time: 25.0 # max time to run the planner (s)
+
+# rrt_star:
+#   planner_type: "rrt_star"
+#   step_size: 0.2 # PLACEHOLER
+#   max_iterations: 20000 # PLACEHOLER
+#   bias: 0.2 # Probability of sampling the goal (for biasing)
+#   # goal_sample_rate: 0.2 # PLACEHOLER
+#   rewire_radius: 0.61 # PLACEHOLER
+#   max_time: 25.0 # max time to run the planner (s)
+
+rrt_with_connecting:
+  planner_type: "rrt_with_connecting"
+  planner_params:
+    step_size: 0.2       # step between nodes TODO -> WHAT IS THE UNIT (rad)
+    bias: 0.2  # Probability of sampling the goal (for biasing)
+    max_iterations: 20000
+    max_goal_samples: 10
+    max_time: 25.0 # max time to run the planner (s)
+
+# prm:
+#   planner_type: "prm"
+#   n_nodes: 1000000  # Number of sampled configurations in the roadmap
+#   k_neighbors: 10  # Number of neighbors to attempt connecting to
+#   step_size: 0.1  # Step size for edge interpolation
+#   weights: [0.5, 1.0, 1.0, 0.5, 0.05, 0.05, 0.05]  # Joint-space weights

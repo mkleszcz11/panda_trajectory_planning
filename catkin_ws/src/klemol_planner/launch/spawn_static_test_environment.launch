@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Include the existing demo_gazebo.launch -->
+  <include file="$(find panda_moveit_config)/launch/demo_gazebo.launch" />
+
+</launch>

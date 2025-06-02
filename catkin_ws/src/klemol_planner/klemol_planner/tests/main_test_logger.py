@@ -1,29 +1,49 @@
 import rospy
 import numpy as np
 from control_msgs.msg import JointTrajectoryControllerState
+# from klemol_planner.environment.robot_model import RobotModel # Circular import
 
 
 class MainTestLogger:
-    def __init__(self):
+    def __init__(self, robot_model):
+        self.active = False # When true logger is recording (callback is active)
         self.results = []
+        self.robot_model = robot_model
         self.reset()
 
     def reset(self):
         # Reset all logged data for a new test run
-        self.planning_time = None
-        self.execution_time = None
-        self.number_of_steps = None
-        self.joint_travel_distances = [0.0 for _ in range(7)]
-        self.cartesian_path_length = None
+        self.planning_time = None # Only the time when we are planning
+        self.execution_time = None # Only the time when we are moving
+        self.number_of_steps = None # 
+        self.number_of_waypoints_before_post_processing = None # Number of waypoints before any post-processing
+        self.joint_travel_distances = [0.0 for _ in range(7)] # Each joint's total travel distance
+        self.cartesian_path_length = None # Total length of the Cartesian path traveled by the end-effector
 
         # Real-time tracking during execution
         self.start_time = None
         self.movement_started = False
         self.time_stamps = []
-        self.positions = []
+        self.joint_positions = [] # List of joint positions for each time (list of 7 elemnt lists)
+        self.ee_positions = [] # List of end-effector positions for each time (list of 3 elemnt lists)
         self.velocities = []
 
         self.current_planner = "undefined"
+        self.active = False
+
+    def activate(self):
+        if not self.active:
+            rospy.loginfo("Activating MainTestLogger")
+            self.active = True
+        else:
+            rospy.logwarn("MainTestLogger is already active")
+
+    def deactivate(self):
+        if self.active:
+            rospy.loginfo("Deactivating MainTestLogger")
+            self.active = False
+        else:
+            rospy.logwarn("MainTestLogger is already inactive")
 
     def set_planner(self, planner_name: str):
         self.current_planner = planner_name
@@ -38,32 +58,44 @@ class MainTestLogger:
 
     def callback(self, msg: JointTrajectoryControllerState):
         # Record data from trajectory controller state
-        current_time = rospy.Time.now().to_sec()
-        if self.start_time is None:
-            self.start_time = current_time  # Fallback if not explicitly started
+        if self.active:
+            current_time = rospy.Time.now().to_sec()
+            if self.start_time is None:
+                self.start_time = current_time  # Fallback if not explicitly started
 
-        elapsed_time = current_time - self.start_time
-        self.time_stamps.append(elapsed_time)
-        self.positions.append(list(msg.actual.positions[:7]))  # Only joints 1-7
-        self.velocities.append(list(msg.actual.velocities[:7]))
+            elapsed_time = current_time - self.start_time
+            self.time_stamps.append(elapsed_time)
+            self.joint_positions.append(list(msg.actual.positions[:7]))  # Only joints 1-7
+            
+            ee_pose = self.robot_model.fk(np.array(self.joint_positions[-1]))
+            ee_list_to_append = [ee_pose.x, ee_pose.y, ee_pose.z]
+            self.ee_positions.append(ee_list_to_append)
 
-        # Detect when movement starts (if any joint velocity exceeds threshold)
-        if not self.movement_started:
-            if any(abs(v) > 1e-3 for v in msg.actual.velocities[:7]):
-                self.movement_started = True
-                self.movement_start_time = elapsed_time
+            self.velocities.append(list(msg.actual.velocities[:7]))
+
+            # Detect when movement starts (if any joint velocity exceeds threshold)
+            if not self.movement_started:
+                if any(abs(v) > 1e-2 for v in msg.actual.velocities[:7]):
+                    self.movement_started = True
+                    self.movement_start_time = elapsed_time
+        else:
+            rospy.logwarn("MainTestLogger is not active. Callback data will not be recorded.")
 
     def compute_metrics(self):
-        if not self.positions:
+        if not self.joint_positions:
             return
 
-        positions_array = np.array(self.positions)
-        diffs = np.diff(positions_array, axis=0)
-        joint_distances = np.sum(np.abs(diffs), axis=0)
+        joint_positions_array = np.array(self.joint_positions) # 
+        ee_positions_array = np.array(self.ee_positions)
+        joint_diffs = np.diff(joint_positions_array, axis=0)
+        joint_distances = np.sum(np.abs(joint_diffs), axis=0)
+        ee_diffs = np.diff(ee_positions_array, axis=0)
+        ee_distances = np.linalg.norm(ee_diffs, axis=1)
         self.joint_travel_distances = joint_distances.tolist()
-        self.number_of_steps = len(self.positions)
+        self.number_of_steps = len(self.joint_positions)
 
-        self.cartesian_path_length = float(np.sum(np.linalg.norm(diffs, axis=1)))
+        self.cartesian_path_length = np.sum(ee_distances) if len(ee_distances) > 0 else 0.0
+
 
         if self.movement_started:
             self.execution_time = self.time_stamps[-1] - self.movement_start_time
@@ -76,10 +108,12 @@ class MainTestLogger:
             "planning_time": self.planning_time,
             "execution_time": self.execution_time,
             "number_of_steps": self.number_of_steps,
+            "number_of_waypoints_before_post_processing": self.number_of_waypoints_before_post_processing,
             "joint_travel_distances": self.joint_travel_distances,
+            "cartesain_positions": self.ee_positions,
             "cartesian_path_length": self.cartesian_path_length,
             "time_stamps": self.time_stamps,
-            "positions": self.positions,
+            "positions": self.joint_positions,
             "velocities": self.velocities
         })
 

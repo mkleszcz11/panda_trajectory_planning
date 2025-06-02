@@ -8,6 +8,8 @@ from klemol_planner.post_processing.path_post_processing import PathPostProcessi
 
 import moveit_commander
 import copy
+import os
+import yaml
 
 
 class PlannersTestRunner:
@@ -23,24 +25,15 @@ class PlannersTestRunner:
         self.collision_checker = CollisionChecker(group_name="panda_arm")
         self.post_processing = PathPostProcessing(collision_checker=self.collision_checker)
 
-        self.logger = MainTestLogger()
+        self.logger = MainTestLogger(robot_model = self.robot_model)
         self.executor = PlannersTestExecutor(robot_model=self.robot_model,
                                              collision_checker=self.collision_checker,
                                              post_processing=self.post_processing,
                                              logger=self.logger)
-        
 
-        self.planners = [
-            "rrt",
-            "rrt_with_connecting",
-            # "rrt_star",
-            # "prm",
-            # "prm_star",
-            # "sbl",
-            # "est",
-            # "birrt",
-            # "kpiece"
-        ]
+        self.test_config_file = os.path.join(os.path.dirname(__file__), "test_planner_params.yaml")
+        with open(self.test_config_file) as f:
+            self.planner_configs = yaml.safe_load(f)
 
     def run_tests(self):
         """
@@ -53,24 +46,28 @@ class PlannersTestRunner:
 
             # We should test achieving the cartesian pose, we don't know what will be the joint configuration
             goal_end_effector_pose = self.robot_model.fk(goal_joint_config)
-            print((f"GOAL END-EFFECTOR POSE: {goal_end_effector_pose}"))
+
             # Be sure the goal is PointWithOrientation
             if not isinstance(goal_end_effector_pose, PointWithOrientation):
                 raise TypeError("Goal end-effector pose must be of type PointWithOrientation.")
 
-            for planner in self.planners:
-                rospy.loginfo(f"Running planner: {planner}")
-                # self.logger.set_planner(planner)
+            # Load config file:
 
+            for planner_name, planner_config in self.planner_configs.items():
+                planner_type = planner_config['planner_type']
+                planner_params = planner_config['planner_params']
+                rospy.loginfo(f"Running {planner_name} ({planner_type}) with parameters: {planner_params}")
                 # Run the planner test
-                self.executor.run_test(planner_type=planner,
+                self.executor.run_test(test_name=planner_name,
+                                       planner_type=planner_type,
+                                       planner_params=planner_params,
                                        start_joint_config=start_joint_config,
                                        goal_end_effector_pose=goal_end_effector_pose)
 
                 rospy.sleep(0.5)
 
         # Save all results to a single file after all tests
-        self.logger.save_all('/tmp/planner_test_results.npz')
+        self.logger.save('/tmp/planner_test_results.npz')
         rospy.loginfo("All results saved.")
 
 if __name__ == "__main__":
