@@ -61,6 +61,7 @@ class RRTPlanner(Planner):
                            urdf_string = self.robot_model.urdf_string,
                            timeout = 1.0,
                            solve_type="Distance")
+
         # random_seed = np.random.uniform(self.robot_model.lower_bounds, self.robot_model.upper_bounds)
         goal_config = self.robot_model.ik_with_custom_solver(self.goal_pose, solver = custom_solver)
 

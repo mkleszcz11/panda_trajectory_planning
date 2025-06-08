@@ -17,7 +17,7 @@ class PlannersTestRunner:
         """
         Initializes the PlannersTestRunner.
         """
-        self.NUMBER_OF_LOOPS = 2
+        self.NUMBER_OF_LOOPS = 30
 
         rospy.init_node("franka_motion_controller")
         moveit_commander.roscpp_initialize([])
@@ -40,7 +40,10 @@ class PlannersTestRunner:
         Main function to run the tests.
         """
         for i in range(self.NUMBER_OF_LOOPS):
+            rospy.loginfo(f"#########################################")
             rospy.loginfo(f"Starting loop {i + 1}/{self.NUMBER_OF_LOOPS}")
+            rospy.loginfo(f"#########################################")
+            self.logger.current_loop_index = i
             start_joint_config = self.robot_model.sample_random_valid_configuration(collision_checker=self.collision_checker)
             goal_joint_config = self.robot_model.sample_random_valid_configuration(collision_checker=self.collision_checker)
 
@@ -67,7 +70,7 @@ class PlannersTestRunner:
                 rospy.sleep(0.5)
 
         # Save all results to a single file after all tests
-        self.logger.save('/tmp/planner_test_results.npz')
+        self.logger.save('/home/marcin/results/planner_random_30_loops_test_results.npz')
         rospy.loginfo("All results saved.")
 
 if __name__ == "__main__":

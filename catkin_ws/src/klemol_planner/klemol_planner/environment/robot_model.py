@@ -143,6 +143,32 @@ class Robot:
             Random joint configuration (7D np.ndarray)
         """
         return np.random.uniform(self.lower_bounds, self.upper_bounds)
+    
+    def sample_random_configuration_in_task_space(self) -> np.ndarray:
+        """
+        Sample a random joint configuration that is within the task space defined by the end-effector pose.
+
+        Returns:
+            Random joint configuration (7D np.ndarray)
+        """
+        x_range = (0.1, 0.7)
+        y_range = (-0.4, 0.4)
+        z_range = (0.17, 0.5)
+        
+        while True:
+            x = np.random.uniform(*x_range)
+            y = np.random.uniform(*y_range)
+            z = np.random.uniform(*z_range)
+            roll = np.random.uniform(-np.pi, np.pi)
+            pitch = np.random.uniform(-np.pi/2, np.pi/2)
+            yaw = np.random.uniform(-np.pi, np.pi)
+
+            # Get ik solution for random sampled pose
+            pose = PointWithOrientation(x=x, y=y, z=z, roll=roll, pitch=pitch, yaw=yaw)
+            config = self.ik(pose)
+
+            if config is not None and self.is_within_limits(config):
+                return config
 
     def is_within_limits(self, config: np.ndarray) -> bool:
         """
@@ -155,6 +181,21 @@ class Robot:
             True if within joint limits.
         """
         return np.all(config >= self.lower_bounds) and np.all(config <= self.upper_bounds)
+    
+    def is_in_task_space(self, config: np.ndarray) -> bool:
+        """
+        Check if the joint configuration is within the task space defined by the end-effector pose.
+
+        Args:
+            config: Joint configuration.
+
+        Returns:
+            True if the end-effector pose is within the task space.
+        """
+        pose = self.fk(config)
+        return (pose.x >= 0.1 and pose.x <= 0.7 and
+                pose.y >= -0.4 and pose.y <= 0.4 and
+                pose.z >= 0.17 and pose.z <= 0.5)
 
     def ik(self, pose: PointWithOrientation) -> t.Optional[np.ndarray]:
         """
@@ -283,7 +324,7 @@ class Robot:
             base_link=self.base_link,
             tip_link=self.ee_link,
             urdf_string=self.urdf_string,
-            timeout=0.2,
+            timeout=0.1,
             solve_type="Distance",
         )
 
@@ -301,6 +342,9 @@ class Robot:
         planner.set_start(path[-1])
         planner.set_goal(goal)
         planned_path, success = planner.plan()
+        if not success:
+            logger.planning_successful = False
+
         path += planned_path
 
         ### ADDING INTERMEDIATE NODES UP TO THE OBJECT ###
@@ -322,6 +366,7 @@ class Robot:
             rospy.loginfo(f"Planner found path with {len(path)} waypoints.")
             rospy.loginfo(f"Fitting spline to the path...")
             # Smooth the path and execute smooth trajectory
+            logger.spline_fitting_start_time = logger.stop_timer()
             trajectory = post_processing.interpolate_quintic_trajectory(
                 path=path,
                 joint_names=self.group.get_active_joints(),
@@ -329,6 +374,7 @@ class Robot:
                 acceleration_limits=self.acceleration_limits,
                 max_vel_acc_multiplier = 0.3
                 )
+            logger.spline_fitting_time = logger.stop_timer()
             self.send_trajectory_to_controller(trajectory)
         else:
             rospy.logwarn("Planner failed to find a path.")

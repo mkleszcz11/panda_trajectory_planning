@@ -39,8 +39,7 @@ class PlannersTestExecutor:
                  start_joint_config: np.ndarray,
                  goal_end_effector_pose: PointWithOrientation,
                  velocity_limits: np.ndarray = np.ones(7)):
-        rospy.loginfo(f"Running test for: {planner_type}")
-        # TODO - integrate with logger
+        rospy.loginfo(f"### Running test for: {planner_type} ###")
 
         ### Test setup
         self.logger.reset()
@@ -93,6 +92,13 @@ class PlannersTestExecutor:
             return RRTStarPlanner(robot_model=self.robot_model,
                                   collision_checker=self.collision_checker,
                                   parameters=params)
+        
+        elif planner_type == "prm":
+            from klemol_planner.planners.prm import PRMPlanner
+            print(f"PRM planner initialized with parameters: {params}")
+            return PRMPlanner(robot_model=self.robot_model,
+                              collision_checker=self.collision_checker,
+                              parameters=params)
 
         else:
             raise ValueError(f"Unknown planner type: {planner_type}")

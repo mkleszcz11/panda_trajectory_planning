@@ -52,6 +52,7 @@ class PlannersTestRunner:
         """
         for i in range(self.NUMBER_OF_LOOPS):
             rospy.loginfo(f"Starting loop {i + 1}/{self.NUMBER_OF_LOOPS}")
+            self.logger.current_loop_index = i
             start_joint_config = [0, -0.985, 0, -2.356, 0, 1.571, 0.785]# - math.pi] 
             # We should test achieving the cartesian pose, we don't know what will be the joint configuration
             goal_end_effector_pose = PointWithOrientation(0.6, 0.0, 0.3, math.pi, 0.0, math.pi * 0.75)

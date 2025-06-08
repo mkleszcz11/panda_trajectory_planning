@@ -115,7 +115,7 @@ class PathPostProcessing:
             point.time_from_start = rospy.Duration.from_sec(t_val)
             traj_msg.points.append(point)
 
-        traj_msg.header.stamp = rospy.Time.now() + rospy.Duration(0.5)
+        traj_msg.header.stamp = rospy.Time.now() + rospy.Duration(0.3) #TODO Increase this in case of weird robot noises
 
         return traj_msg
 

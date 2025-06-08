@@ -9,11 +9,15 @@ class MainTestLogger:
         self.active = False # When true logger is recording (callback is active)
         self.results = []
         self.robot_model = robot_model
+        self.current_loop_index = 0
         self.reset()
 
     def reset(self):
         # Reset all logged data for a new test run
+        self.planning_successful = True # If the test run was successful, set to False in case of too long planning time etc.
         self.planning_time = None # Only the time when we are planning
+        self.spline_fitting_start_time = None # Start time of spline fitting
+        self.spline_fitting_time = None # Only the time when we are fitting the spline
         self.execution_time = None # Only the time when we are moving
         self.number_of_steps = None # 
         self.number_of_waypoints_before_post_processing = None # Number of waypoints before any post-processing
@@ -59,9 +63,13 @@ class MainTestLogger:
     def callback(self, msg: JointTrajectoryControllerState):
         # Record data from trajectory controller state
         if self.active:
-            current_time = rospy.Time.now().to_sec()
+            # current_time = rospy.Time.now().to_sec()
+            current_time = msg.header.stamp.to_sec() # USE SIM TIME
+
             if self.start_time is None:
-                self.start_time = current_time  # Fallback if not explicitly started
+                # self.start_time = current_time  # Fallback if not explicitly started
+                rospy.logwarn("start_time not explicitly set, falling back to first sim timestamp.") # USE SIM TIME
+                self.start_time = current_time                                                       # USE SIM TIME
 
             elapsed_time = current_time - self.start_time
             self.time_stamps.append(elapsed_time)
@@ -78,8 +86,8 @@ class MainTestLogger:
                 if any(abs(v) > 1e-2 for v in msg.actual.velocities[:7]):
                     self.movement_started = True
                     self.movement_start_time = elapsed_time
-        else:
-            rospy.logwarn("MainTestLogger is not active. Callback data will not be recorded.")
+        # else:
+        #     rospy.logwarn("MainTestLogger is not active. Callback data will not be recorded.")
 
     def compute_metrics(self):
         if not self.joint_positions:
@@ -102,10 +110,18 @@ class MainTestLogger:
         else:
             self.execution_time = None
 
+        if self.spline_fitting_time is not None and self.spline_fitting_start_time is not None:
+            self.spline_fitting_time -= self.spline_fitting_start_time
+        else:
+            self.spline_fitting_time = None
+
         # Append results
         self.results.append({
             "planner": self.current_planner,
+            "loop_index": self.current_loop_index,
+            "planning_successful": self.planning_successful,
             "planning_time": self.planning_time,
+            "spline_fitting_time": self.spline_fitting_time,
             "execution_time": self.execution_time,
             "number_of_steps": self.number_of_steps,
             "number_of_waypoints_before_post_processing": self.number_of_waypoints_before_post_processing,
