@@ -43,17 +43,17 @@ def analyze_results(filename='/tmp/planner_test_results.npz', output_dir='plots'
         print(f"  Avg Waypoints (successful only): {avg_waypoints:.1f}")
         print(f"  Avg Cartesian Path Length (successful only): {avg_cartesian_path:.3f}")
 
-    # Optional: Print details for each test
-    print("\nDetailed Results:")
-    for i, entry in enumerate(results):
-        print(f"\nTest {i+1} - Planner: {entry['planner']}")
-        print(f"  Planning Time: {entry['planning_time']}")
-        print(f"  Spline Fitting Time: {entry['spline_fitting_time']}")
-        print(f"  Execution Time: {entry['execution_time']}")
-        print(f"  Number of Steps: {entry['number_of_steps']}")
-        print(f"  Number of Waypoints Before Post Processing: {entry['number_of_waypoints_before_post_processing']}")
-        print(f"  Joint Travel Distances: {entry['joint_travel_distances']}")
-        print(f"  Cartesian Path Length: {entry['cartesian_path_length']}")
+    # # Optional: Print details for each test
+    # print("\nDetailed Results:")
+    # for i, entry in enumerate(results):
+    #     print(f"\nTest {i+1} - Planner: {entry['planner']}")
+    #     print(f"  Planning Time: {entry['planning_time']}")
+    #     print(f"  Spline Fitting Time: {entry['spline_fitting_time']}")
+    #     print(f"  Execution Time: {entry['execution_time']}")
+    #     print(f"  Number of Steps: {entry['number_of_steps']}")
+    #     print(f"  Number of Waypoints Before Post Processing: {entry['number_of_waypoints_before_post_processing']}")
+    #     print(f"  Joint Travel Distances: {entry['joint_travel_distances']}")
+    #     print(f"  Cartesian Path Length: {entry['cartesian_path_length']}")
 
     # Group by loop index
     grouped_by_loop = defaultdict(list)
@@ -135,7 +135,7 @@ def plot_3d_paths(all_tests):
     plt.show()
 
 if __name__ == '__main__':
-    analyze_results('/home/marcin/results/planner_random_30_loops_test_results.npz')
+    analyze_results('/home/marcin/results/planner_obstacle_30_loops_test_results.npz')
 
 
 

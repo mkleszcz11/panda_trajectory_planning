@@ -15,6 +15,9 @@ from klemol_planner.planners.nodes import GraphNode
 import os
 from klemol_planner.planners.base import Planner
 from klemol_planner.planners.nodes import GraphNode
+import moveit_commander
+from geometry_msgs.msg import PoseStamped
+import rospy
 
 class PRMRoadmapBuilder:
     """
@@ -24,7 +27,7 @@ class PRMRoadmapBuilder:
                     robot_model,
                     collision_checker,
                     n_nodes: int = 1000,
-                    k_neighbors: int = 10,
+                    k_neighbors: int = 5,
                     weights: list = [1.0]*7,
                     path_to_save: str = "prm_roadmap.npz",
                     restrict_to_task_space: bool = False):
@@ -47,6 +50,14 @@ class PRMRoadmapBuilder:
         print(f"--- building roadmap ---")
         self.roadmap.clear()
         valid_configs = []
+
+        self.scene = moveit_commander.PlanningSceneInterface()
+        self.add_box_obstacle(
+            name="inflated_stick",
+            size=(0.02, 0.02, 0.8),
+            position=(0.42, 0.0, 0.4),
+            collision_margin=0.03  # Add 3 cm clearance on all sides
+        )
 
         i = 0
         while len(valid_configs) < self.n_nodes:
@@ -88,7 +99,7 @@ class PRMRoadmapBuilder:
 
         # Generate connection candidates (only forward edges)
         for i, node in enumerate(node_list):
-            if i % 1000 == 0:
+            if i % 100 == 0:
                 print(f"Finding neighbors for node {node.id}/{len(node_list)}")
             distances, indices = self.kdtree.query(node.config, k=self.k_neighbors + 1)
             for idx in indices[1:]:  # skip self
@@ -101,10 +112,10 @@ class PRMRoadmapBuilder:
             node_i = self.roadmap[i]
             node_j = self.roadmap[j]
 
-            # if self._is_collision_free_path(node_i.config, node_j.config):
-            cost = self._weighted_distance(node_i.config, node_j.config)
-            return (i, j, cost)
-            # return None
+            if self.collision_checker.is_collision_free(node_i.config, node_j.config):
+                cost = self._weighted_distance(node_i.config, node_j.config)
+                return (i, j, cost)
+            return None
 
         print(f"Checking {len(all_pairs)} potential edges in parallel...")
         with ThreadPoolExecutor() as executor:
@@ -133,20 +144,51 @@ class PRMRoadmapBuilder:
         diff = config_1 - config_2
         return np.sqrt(np.sum(self.weights * diff**2))
 
+    def add_box_obstacle(self, name, size, position, orientation=(0, 0, 0, 1), collision_margin=0.0):
+        """
+        Add a box obstacle to the planning scene with an optional collision margin.
+
+        Args:
+            name (str): Name of the obstacle.
+            size (tuple): (x, y, z) dimensions of the actual box (meters).
+            position (tuple): (x, y, z) center of the box (meters).
+            orientation (tuple): Quaternion (x, y, z, w) orientation.
+            collision_margin (float): Amount to inflate each dimension symmetrically (meters).
+        """
+        # Inflate size symmetrically
+        inflated_size = tuple(s + 2 * collision_margin for s in size)
+
+        box_pose = PoseStamped()
+        box_pose.header.frame_id = self.robot_model.base_link
+        box_pose.pose.position.x = position[0]
+        box_pose.pose.position.y = position[1]
+        box_pose.pose.position.z = position[2]
+        box_pose.pose.orientation.x = orientation[0]
+        box_pose.pose.orientation.y = orientation[1]
+        box_pose.pose.orientation.z = orientation[2]
+        box_pose.pose.orientation.w = orientation[3]
+
+        self.scene.add_box(name, box_pose, size=inflated_size)
+        rospy.sleep(1.0)
+        rospy.loginfo(f"Added box '{name}' at {position} with inflated size {inflated_size} (original: {size}, margin: {collision_margin})")
+
+
 if __name__ == "__main__":
     # Example usage
     robot_model = Robot()  # Replace with actual robot model initialization
     collision_checker = CollisionChecker()  # Replace with actual collision checker initialization
-    
-    roadmap_name = "roadmap-sampl_100000-k_10-step_01-w_1_1_08_05_01_01_01.npz"
-    weights = [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Example weights for each joint
+
+    #roadmap_name = "roadmap-restricted-collision-enabled-sampl_1000-k_5-step_01-w_1_1_08_05_01_01_01.npz"
+    roadmap_name = "roadmap-restricted-collision-enabled-sampl_1000-k_5-step_01-w_1_1_1_1_1_1_1.npz"
+    #weights = [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Example weights for each joint
+    weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Default weights for all joints
     roadmap_builder = PRMRoadmapBuilder(robot_model = robot_model,
                                         collision_checker = collision_checker,
-                                        n_nodes = 100000,
-                                        k_neighbors = 10,
+                                        n_nodes = 1000,
+                                        k_neighbors = 5,
                                         weights = weights,
                                         path_to_save = roadmap_name,
-                                        restrict_to_task_space=False)
+                                        restrict_to_task_space=True)
 
     # Build the roadmap
     roadmap_builder.build_roadmap()

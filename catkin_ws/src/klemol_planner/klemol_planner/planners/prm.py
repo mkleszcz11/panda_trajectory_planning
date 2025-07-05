@@ -14,6 +14,7 @@ from trac_ik_python.trac_ik import IK
 
 import os
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 class PRMPlanner(Planner):
 
@@ -126,7 +127,7 @@ class PRMPlanner(Planner):
         distances, indices = self.kdtree.query(config, k=self.k_neighbors)
         for idx in indices:
             neighbor = list(self.roadmap.values())[idx]
-            if self._is_collision_free_path(config, neighbor.config):
+            if self.collision_checker.is_collision_free(config, neighbor.config):
                 cost = self._weighted_distance(config, neighbor.config)
                 node.add_edge(neighbor.id, cost)
                 neighbor.add_edge(node.id, cost)
@@ -177,9 +178,12 @@ class PRMPlanner(Planner):
             attempts += 1
             if q is None:
                 continue
-            if not self.robot_model.is_within_limits(q) or self.collision_checker.is_in_collision(q):
+            if not self.robot_model.is_within_limits(q) or self.collision_checker.is_joint_config_in_collision(q):
                 continue
             if any(np.linalg.norm(q - existing) < 1e-2 for existing in goal_configs):
                 continue
             goal_configs.append(q)
+        if not goal_configs:
+            raise ValueError("No valid goal configurations found for the given goal pose.")
+
         return goal_configs

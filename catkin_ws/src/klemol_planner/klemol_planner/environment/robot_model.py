@@ -129,7 +129,7 @@ class Robot:
         for _ in range(max_attempts):
             config = self.sample_random_configuration()
 
-            if collision_checker.is_in_collision:
+            if collision_checker.is_collision_free:
                 return config
         
         raise RuntimeError(f"Could not find a valid configuration in {max_attempts} attempts.")
@@ -144,7 +144,7 @@ class Robot:
         """
         return np.random.uniform(self.lower_bounds, self.upper_bounds)
     
-    def sample_random_configuration_in_task_space(self) -> np.ndarray:
+    def sample_random_configuration_in_task_space(self, obstacle = None) -> np.ndarray:
         """
         Sample a random joint configuration that is within the task space defined by the end-effector pose.
 
@@ -374,6 +374,13 @@ class Robot:
                 acceleration_limits=self.acceleration_limits,
                 max_vel_acc_multiplier = 0.3
                 )
+            # trajectory = post_processing.mock_interpolate(
+            #     path=path,
+            #     joint_names=self.group.get_active_joints(),
+            #     velocity_limits=self.velocity_limits,
+            #     acceleration_limits=self.acceleration_limits,
+            #     segment_time = 2.0
+            #     )
             logger.spline_fitting_time = logger.stop_timer()
             self.send_trajectory_to_controller(trajectory)
         else:

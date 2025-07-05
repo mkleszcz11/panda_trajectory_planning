@@ -3,4 +3,10 @@
   <!-- Include the existing demo_gazebo.launch -->
   <include file="$(find panda_moveit_config)/launch/demo_gazebo.launch" />
 
+  <!-- Spawn a vertical rod in Gazebo -->
+  <param name="robot_description_table_box" command="$(find xacro)/xacro '$(find klemol_planner)/urdf/table_box.urdf.xacro'" />
+
+  <node name="spawn_table_box" pkg="gazebo_ros" type="spawn_model" output="screen"
+        args="-param robot_description_table_box -urdf -model table_box -x 0.42 -y 0.0 -z 0.0"/>
+
 </launch>

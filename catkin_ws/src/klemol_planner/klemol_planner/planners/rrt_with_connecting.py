@@ -61,7 +61,7 @@ class RRTWithConnectingPlanner(Planner):
             raise ValueError("Start configuration and goal pose must be set before planning.")
 
         # Step 1: generate multiple IK solutions
-        self.goal_configs = self._generate_goal_configurations(self.goal_pose)
+        self.goal_configs = self.generate_goal_configurations(self.goal_pose)
         if not self.goal_configs:
             rospy.logwarn("No valid IK solutions found for the given goal pose.")
             return [], False
@@ -88,7 +88,7 @@ class RRTWithConnectingPlanner(Planner):
             connectable_goals = []
             for goal_config in self.goal_configs:
                 print(f"Checking connection to goal config: {goal_config}")
-                if self._is_collision_free_path(new_config, goal_config):
+                if self.collision_checker.is_collision_free(start_config=new_config, goal_config=goal_config):
                     connectable_goals.append(goal_config)
 
             # If any goal is directly reachable, pick the best one (e.g. closest in joint space)
@@ -122,7 +122,7 @@ class RRTWithConnectingPlanner(Planner):
             # Check joint limits and collision
             if not self.robot_model.is_within_limits(new_config):
                 continue
-            if self.collision_checker.is_in_collision(new_config):
+            if not self.collision_checker.is_collision_free(start_config=nearest.config, goal_config=new_config):
                 continue
 
             # Add to tree
@@ -206,42 +206,3 @@ class RRTWithConnectingPlanner(Planner):
         diff = config1 - config2
         return np.sqrt(np.sum(weights * diff**2))
     
-    def _generate_goal_configurations(self, goal_pose: PointWithOrientation) -> t.List[np.ndarray]:
-        """
-        Generate multiple IK solutions for a single end-effector pose.
-        
-        Args:
-            goal_pose: Desired 6D pose of the end-effector.
-        
-        Returns:
-            A list of valid, unique joint configurations that solve the pose.
-        """
-        goal_configs: t.List[np.ndarray] = []
-        seed_attempts = 0
-        max_attempts = self.max_goal_samples
-        threshold = 1e-2  # Joint-space uniqueness threshold
-
-        ik_solver = IK(
-            base_link=self.robot_model.base_link,
-            tip_link=self.robot_model.ee_link,
-            urdf_string=self.robot_model.urdf_string,
-            timeout=0.1,
-            solve_type="Speed",
-        )
-        while len(goal_configs) < self.max_goal_samples and seed_attempts < max_attempts:
-            random_seed = np.random.uniform(self.robot_model.lower_bounds, self.robot_model.upper_bounds)
-            solution = self.robot_model.ik_with_custom_solver(goal_pose, solver=ik_solver, seed=random_seed)
-            seed_attempts += 1
-
-            if solution is None:
-                continue
-            if not self.robot_model.is_within_limits(solution):
-                continue
-            if self.collision_checker.is_in_collision(solution):
-                continue
-            # Ensure uniqueness
-            if any(np.linalg.norm(solution - existing) < threshold for existing in goal_configs):
-                continue
-            goal_configs.append(solution)
-
-        return goal_configs

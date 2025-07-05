@@ -22,6 +22,44 @@ class PathPostProcessing:
     def __init__(self, collision_checker: CollisionChecker):
         self.collision_checker = collision_checker
 
+    def mock_interpolate(
+        self,
+        path: t.List[np.ndarray],
+        joint_names: t.List[str],
+        velocity_limits: np.ndarray,
+        acceleration_limits: np.ndarray,
+        dt: float = 0.005,
+        segment_time: float = 1.0,
+    ) -> JointTrajectory:
+        """
+        Simple mock interpolator: piecewise linear segments with stop at each waypoint.
+
+        Args:
+            path: List of joint configurations.
+            joint_names: Joint names.
+            velocity_limits: Max joint velocities (not used here).
+            acceleration_limits: Max joint accelerations (not used here).
+            dt: Sampling interval (not used here, as we stop at waypoints).
+            segment_time: Time between consecutive waypoints.
+
+        Returns:
+            JointTrajectory message.
+        """
+        traj_msg = JointTrajectory()
+        traj_msg.joint_names = joint_names
+        traj_msg.header = Header()
+        traj_msg.header.stamp = rospy.Time.now() + rospy.Duration(0.3)
+
+        for i, config in enumerate(path):
+            point = JointTrajectoryPoint()
+            point.positions = config.tolist()
+            point.velocities = [0.0] * len(config)
+            point.accelerations = [0.0] * len(config)
+            point.time_from_start = rospy.Duration.from_sec(i * segment_time)
+            traj_msg.points.append(point)
+
+        return traj_msg
+
     def interpolate_quintic_trajectory(
         self,
         path: t.List[np.ndarray],
@@ -321,23 +359,6 @@ class PathPostProcessing:
         """
         return [config_a + (config_b - config_a) * float(i) / (num_points - 1) for i in range(num_points)]
 
-    def is_collision_free(self, start: np.ndarray, end: np.ndarray, num_samples: int = 10) -> bool:
-        """
-        Check if straight-line interpolation between two joint configurations is collision-free.
-
-        Args:
-            start: Start configuration.
-            end: End configuration.
-            num_samples: Number of interpolation points.
-
-        Returns:
-            True if all interpolated points are collision free.
-        """
-        for point in self.interpolate_linear(start, end, num_samples):
-            if self.collision_checker.is_in_collision(point):
-                return False
-        return True
-
     def generate_a_shortcutted_path(self, path: t.List[np.ndarray]) -> t.List[np.ndarray]:
         """
         Analyze a path and shortcut it as much as possible using straight-line segments.
@@ -360,7 +381,7 @@ class PathPostProcessing:
         while i < len(path) - 1:
             found = False
             for j in range(len(path) - 1, i, -1):
-                if self.is_collision_free(path[i], path[j]):
+                if self.collision_checker.is_collision_free(path[i], path[j]):
                     new_path.append(path[j])
                     i = j
                     found = True

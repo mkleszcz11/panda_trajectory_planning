@@ -97,7 +97,7 @@ class RRTPlanner(Planner):
             # Check joint limits and collision
             if not self.robot_model.is_within_limits(new_config):
                 continue
-            if self.collision_checker.is_in_collision(new_config):
+            if not self.collision_checker.is_collision_free(start_config=nearest.config, goal_config=new_config):
                 continue
 
             # Add to tree
