@@ -9,6 +9,8 @@ from klemol_planner.environment.robot_model import Robot
 from klemol_planner.environment.collision_checker import CollisionChecker
 from klemol_planner.goals.point_with_orientation import PointWithOrientation
 
+from trac_ik_python.trac_ik import IK
+
 class Planner:
     def __init__(self,
                  robot_model: Robot,
@@ -60,3 +62,45 @@ class Planner:
             np.array([ 0.0, -0.5, 0.0, -1.5, 0.0, 1.0, 0.5 ])
         """
         raise NotImplementedError("Each planner must implement the plan() method.")
+    
+
+    def generate_goal_configurations(self, goal_pose: PointWithOrientation) -> t.List[np.ndarray]:
+        """
+        Generate multiple IK solutions for a single end-effector pose.
+        
+        Args:
+            goal_pose: Desired 6D pose of the end-effector.
+        
+        Returns:
+            A list of valid, unique joint configurations that solve the pose.
+        """
+        goal_configs: t.List[np.ndarray] = []
+        seed_attempts = 0
+        max_attempts = 20 * self.max_goal_samples
+        threshold = 1e-2  # Joint-space uniqueness threshold
+
+        ik_solver = IK(
+            base_link=self.robot_model.base_link,
+            tip_link=self.robot_model.ee_link,
+            urdf_string=self.robot_model.urdf_string,
+            timeout=0.1,
+            solve_type="Speed",
+        )
+        while len(goal_configs) < self.max_goal_samples and seed_attempts < max_attempts:
+            random_seed = np.random.uniform(self.robot_model.lower_bounds, self.robot_model.upper_bounds)
+            solution = self.robot_model.ik_with_custom_solver(goal_pose, solver=ik_solver, seed=random_seed)
+            seed_attempts += 1
+
+            if solution is None:
+                continue
+            if not self.robot_model.is_within_limits(solution):
+                continue
+            if self.collision_checker.is_joint_config_in_collision(solution):
+                continue
+            # Ensure uniqueness
+            if any(np.linalg.norm(solution - existing) < threshold for existing in goal_configs):
+                continue
+            goal_configs.append(solution)
+
+        return goal_configs
+

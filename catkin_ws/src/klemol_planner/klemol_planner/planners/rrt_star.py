@@ -11,6 +11,8 @@ from klemol_planner.planners.nodes import TreeNode
 
 import rospy
 
+from trac_ik_python.trac_ik import IK
+
 class RRTStarPlanner(Planner):
     """
     Rapidly-exploring Random Tree Star (RRT*) planner implementation.
@@ -22,6 +24,9 @@ class RRTStarPlanner(Planner):
                  robot_model: Robot,
                  collision_checker: CollisionChecker,
                  parameters: dict):
+        """
+        Initialize RRT* planner.
+        """
         super().__init__(robot_model, collision_checker, parameters)
         self.step_size: float = parameters.get("step_size", 0.1)
         self.max_iterations: int = parameters.get("max_iterations", 1000)
@@ -43,8 +48,20 @@ class RRTStarPlanner(Planner):
         if self.start_config is None or self.goal_pose is None:
             raise ValueError("Start configuration and goal pose must be set before planning.")
 
-        goal_config = self.robot_model.ik(self.goal_pose)
+        # Inverse kinematics to find a goal configuration
+        # goal_config = self.robot_model.ik(self.goal_pose)
+
+        custom_solver = IK(base_link = self.robot_model.base_link,
+                           tip_link = self.robot_model.ee_link,
+                           urdf_string = self.robot_model.urdf_string,
+                           timeout = 1.0,
+                           solve_type="Distance")
+
+        # random_seed = np.random.uniform(self.robot_model.lower_bounds, self.robot_model.upper_bounds)
+        goal_config = self.robot_model.ik_with_custom_solver(self.goal_pose, solver = custom_solver)
+
         if goal_config is None:
+            rospy.logerr("No valid goal configuration found.")
             return [], False
 
         root = TreeNode(self.start_config)
@@ -71,9 +88,10 @@ class RRTStarPlanner(Planner):
             direction = direction / distance
             new_config = nearest.config + self.step_size * direction
 
+            # Check joint limits and collision
             if not self.robot_model.is_within_limits(new_config):
                 continue
-            if self.collision_checker.is_in_collision(new_config):
+            if not self.collision_checker.is_collision_free(start_config=nearest.config, goal_config=new_config):
                 continue
 
             # Create new node
@@ -86,7 +104,7 @@ class RRTStarPlanner(Planner):
 
             # Choose best parent
             for near_node in near_nodes:
-                if not self._is_collision_free(near_node.config, new_node.config):
+                if not self.collision_checker.is_collision_free(start_config = near_node.config, goal_config=new_node.config):
                     continue
                 cost_through_near = near_node.cost + np.linalg.norm(near_node.config - new_node.config)
                 if cost_through_near < new_node.cost:
@@ -97,7 +115,7 @@ class RRTStarPlanner(Planner):
 
             # Rewire near nodes if beneficial
             for near_node in near_nodes:
-                if not self._is_collision_free(new_node.config, near_node.config):
+                if not self.collision_checker.is_collision_free(start_config = new_node.config, goal_config=near_node.config):
                     continue
                 cost_through_new = new_node.cost + np.linalg.norm(new_node.config - near_node.config)
                 if cost_through_new < near_node.cost:
@@ -123,18 +141,6 @@ class RRTStarPlanner(Planner):
             if np.linalg.norm(node.config - new_node.config) <= self.rewire_radius:
                 near_nodes.append(node)
         return near_nodes
-
-    def _is_collision_free(self, from_config: np.ndarray, to_config: np.ndarray) -> bool:
-        """
-        Check collision along the path from from_config to to_config.
-        Simple straight-line interpolation.
-        """
-        steps = int(np.ceil(np.linalg.norm(to_config - from_config) / self.step_size))
-        for i in range(1, steps + 1):
-            interp = from_config + (to_config - from_config) * (i / steps)
-            if self.collision_checker.is_in_collision(interp):
-                return False
-        return True
 
     def _reconstruct_path(self, node: TreeNode) -> t.List[np.ndarray]:
         """

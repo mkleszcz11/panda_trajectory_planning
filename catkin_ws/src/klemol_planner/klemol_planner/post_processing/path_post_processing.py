@@ -1,7 +1,6 @@
 import numpy as np
 import typing as t
 
-from klemol_planner.environment.robot_model import Robot
 from klemol_planner.environment.collision_checker import CollisionChecker
 from klemol_planner.environment.robot_joint_states_reader import JointStatesReader
 from klemol_planner.environment.robot_joint_states_reader import JointStatesReader
@@ -22,6 +21,44 @@ class PathPostProcessing:
     """
     def __init__(self, collision_checker: CollisionChecker):
         self.collision_checker = collision_checker
+
+    def mock_interpolate(
+        self,
+        path: t.List[np.ndarray],
+        joint_names: t.List[str],
+        velocity_limits: np.ndarray,
+        acceleration_limits: np.ndarray,
+        dt: float = 0.005,
+        segment_time: float = 1.0,
+    ) -> JointTrajectory:
+        """
+        Simple mock interpolator: piecewise linear segments with stop at each waypoint.
+
+        Args:
+            path: List of joint configurations.
+            joint_names: Joint names.
+            velocity_limits: Max joint velocities (not used here).
+            acceleration_limits: Max joint accelerations (not used here).
+            dt: Sampling interval (not used here, as we stop at waypoints).
+            segment_time: Time between consecutive waypoints.
+
+        Returns:
+            JointTrajectory message.
+        """
+        traj_msg = JointTrajectory()
+        traj_msg.joint_names = joint_names
+        traj_msg.header = Header()
+        traj_msg.header.stamp = rospy.Time.now() + rospy.Duration(0.3)
+
+        for i, config in enumerate(path):
+            point = JointTrajectoryPoint()
+            point.positions = config.tolist()
+            point.velocities = [0.0] * len(config)
+            point.accelerations = [0.0] * len(config)
+            point.time_from_start = rospy.Duration.from_sec(i * segment_time)
+            traj_msg.points.append(point)
+
+        return traj_msg
 
     def interpolate_quintic_trajectory(
         self,
@@ -60,7 +97,7 @@ class PathPostProcessing:
         qdot_current = joint_reader.get_current_velocities()
 
         # Combine initial position with path
-        q = np.array([q_current] + list(path))
+        q = np.array(list(path))
         n_waypoints = len(q)
         n_joints = len(joint_names)
 
@@ -71,13 +108,20 @@ class PathPostProcessing:
 
         for i in range(1, n_waypoints):
             delta_q = np.abs(q[i] - q[i - 1])
+
+            if delta_q.max() < 1e-6:
+                # If the joint positions are very close, skip this waypoint
+                times.append(0.1)
+                rospy.logwarn(f"Skipping waypoint {i} due to negligible joint movement.")
+                continue
+
             t_required = self._calculate_min_time_linear_movement(delta_q=delta_q,
                                                                   v_max = v_max,
                                                                   a_max = a_max) #np.max(np.maximum(t_vel, t_acc))
             times.append(times[-1] + max(t_required, 0.4))
 
         times = np.array(times)
-        print(f"======== TIMES TIMES TIMES ========\n{times}\n======== TIMES TIMES TIMES ========")
+        # print(f"======== TIMES TIMES TIMES ========\n{times}\n======== TIMES TIMES TIMES ========")
 
         splines = []
         for j in range(n_joints):
@@ -109,7 +153,7 @@ class PathPostProcessing:
             point.time_from_start = rospy.Duration.from_sec(t_val)
             traj_msg.points.append(point)
 
-        traj_msg.header.stamp = rospy.Time.now() + rospy.Duration(0.5)
+        traj_msg.header.stamp = rospy.Time.now() + rospy.Duration(0.3) #TODO Increase this in case of weird robot noises
 
         return traj_msg
 
@@ -139,7 +183,7 @@ class PathPostProcessing:
             accelerations: accelerations at the end of movement
         """
         # Check if we will reach a max speed while moving between waypoints.
-        print(f"A MAX => {a_max} | DELTA Q = {delta_q}")
+        # print(f"A MAX => {a_max} | DELTA Q = {delta_q}")
 
         times_required = np.zeros(7)
 
@@ -170,133 +214,9 @@ class PathPostProcessing:
         # end_v - numpy array (7 elements)
         # end_acc - numpy array (7 elements)
 
-        print(f"TIMES REQUIRED: {times_required}")
+        # print(f"TIMES REQUIRED: {times_required}")
         t_required = times_required.max()
         return t_required
-
-
-    # # SIMPLIFIED
-    # def _calculate_min_time_linear_movement(self,
-    #                                    delta_q: float,
-    #                                    v_max: float,
-    #                                    a_max: float) -> float: #t.Tuple[float, np.ndarray, np.ndarray]:
-    #     """
-    #     Calculate the minimum time required to move delta_q (float - one joint at the time),
-    #     considering joint velocity and acceleration limits. Minimum required time is defined
-    #     in the following way:
-    #     1. Calculate the minimum moving time for each joint
-    #     2. Get the max out of the min times.
-
-    #     Acceleration limits are in the robot model itself (each joint has a different limits).
-
-    #     Note:
-    #         Equation to find a time in linear motion with vel and acc has 2 solutions
-    #         We know vel and acc will be positive, therefore we should always add a square root,
-    #         thus taking a solution "from the future"
-
-    #     Returns:
-    #         time: time required for a movement
-    #         velocities: velocities at the end of movement
-    #         accelerations: accelerations at the end of movement
-    #     """
-    #     # Check if we will reach a max speed while moving between waypoints.
-    #     print(f"A MAX => {a_max} | DELTA Q = {delta_q}")
-    #     possible_velocity = math.sqrt(2 * a_max * delta_q)
-
-    #     # If v_possible <= v_max we will be accelerating for the entire movement duration, calculate this time.
-    #     if possible_velocity <= v_max:
-    #         t_required = math.sqrt((2 * a_max) / (delta_q))
-    #     else:
-    #         # Check how much time does it take to accelerate to the max speed
-    #         t_first_part = v_max / a_max
-
-    #         # Check how much way does it take to accelerate to the max speed
-    #         s_first_part = (a_max * t_first_part * t_first_part) / 2
-
-    #         # Check how much time does it take to move the remaining distance with the max speed
-    #         s_second_part = delta_q - s_first_part
-    #         t_second_part = s_second_part / v_max
-
-    #         t_required = t_first_part + t_second_part
-
-    #         # # Get end velocities and accelerations
-    #         # velocities[i] = 
-    #         # accelerations[i] = 
-
-
-    #     # Considering the longest time, what would be the final speed and acceleration for every joint
-    #     # TODO
-
-    #     # t_required - float
-    #     # end_v - numpy array (7 elements)
-    #     # end_acc - numpy array (7 elements)
-    #     return t_required
-
-    # def _calculate_min_time_linear_movement(self,
-    #                                    delta_q: np.ndarray,
-    #                                    start_v: np.ndarray,
-    #                                    v_max: np.ndarray,
-    #                                    a_max: np.ndarray) -> t.Tuple[float, np.ndarray, np.ndarray]:
-    #     """
-    #     Calculate the minimum time required to move delta_q (joint state),
-    #     considering joint velocity and acceleration limits. Minimum required time is defined
-    #     in the following way:
-    #     1. Calculate the minimum moving time for each joint
-    #     2. Get the max out of the min times.
-
-    #     Acceleration limits are in the robot model itself (each joint has a different limits).
-
-    #     Note:
-    #         Equation to find a time in linear motion with vel and acc has 2 solutions
-    #         We know vel and acc will be positive, therefore we should always add a square root,
-    #         thus taking a solution "from the future"
-
-    #     Returns:
-    #         time: time required for a movement
-    #         velocities: velocities at the end of movement
-    #         accelerations: accelerations at the end of movement
-    #     """
-    #     times_required = np.zeros(7) # Min time for every joint
-    #     velocities = np.zeros(7) # Velocities at the end of movement
-    #     accelerations = np.zeros(7) # Accelerations at the end of movement
-
-    #     # Find the min required time for every joint.
-    #     for i in range(7):
-    #         # Check if we will reach a max speed while moving between waypoints.
-    #         possible_velocity = math.sqrt(start_v[i] + 2 * a_max[i] * delta_q[i])
-
-    #         # If v_possible <= v_max we will be accelerating for the entire movement duration, calculate this time.
-    #         if possible_velocity <= v_max:
-    #             times_required[i] = 
-    #             velocities = 
-    #             accelerations = 
-    #         else:
-    #             # Check how much time does it take to accelerate to the max speed
-    #             t_first_part = 
-
-    #             # Check how much way does it take to accelerate to the max speed
-    #             s_first_part = 
-
-    #             # Check how much time does it take to move the remaining distance with the max speed
-    #             t_second_part = 
-
-    #             times_required[i] =  = t_first_part + t_second_part
-
-    #             # Get end velocities and accelerations
-    #             velocities[i] = 
-    #             accelerations[i] = 
-
-    #     # Get the longest time:
-    #     t_required = times_required.max()
-
-    #     # Considering the longest time, what would be the final speed and acceleration for every joint
-    #     # TODO
-
-    #     # t_required - float
-    #     # end_v - numpy array (7 elements)
-    #     # end_acc - numpy array (7 elements)
-    #     return min_time, times_required, velocities, accelerations
-
 
     def interpolate_trajectory_with_cubic_hermite_splines(
         self,
@@ -383,9 +303,9 @@ class PathPostProcessing:
 
         traj_msg.header.stamp = rospy.Time.now() + rospy.Duration(0.5)
 
-        print("Trajectory starts at:", traj_msg.header.stamp.to_sec())
-        print("First point time_from_start:", traj_msg.points[0].time_from_start.to_sec())
-        print("ROS now:", rospy.Time.now().to_sec())
+        # print("Trajectory starts at:", traj_msg.header.stamp.to_sec())
+        # print("First point time_from_start:", traj_msg.points[0].time_from_start.to_sec())
+        # print("ROS now:", rospy.Time.now().to_sec())
         return traj_msg
 
     def interpolate_trajectory_time_parameterised(self, path: t.List[np.ndarray], joint_names: t.List[str], dt: float = 1.05) -> JointTrajectory:
@@ -439,23 +359,6 @@ class PathPostProcessing:
         """
         return [config_a + (config_b - config_a) * float(i) / (num_points - 1) for i in range(num_points)]
 
-    def is_collision_free(self, start: np.ndarray, end: np.ndarray, num_samples: int = 10) -> bool:
-        """
-        Check if straight-line interpolation between two joint configurations is collision-free.
-
-        Args:
-            start: Start configuration.
-            end: End configuration.
-            num_samples: Number of interpolation points.
-
-        Returns:
-            True if all interpolated points are collision free.
-        """
-        for point in self.interpolate_linear(start, end, num_samples):
-            if self.collision_checker.is_in_collision(point):
-                return False
-        return True
-
     def generate_a_shortcutted_path(self, path: t.List[np.ndarray]) -> t.List[np.ndarray]:
         """
         Analyze a path and shortcut it as much as possible using straight-line segments.
@@ -470,15 +373,15 @@ class PathPostProcessing:
         """
         if not path:
             return []
-        print("GENERATING A SHORTCUTTED PATH")
-        print(f"Original path length: {len(path)}")
+        # print("GENERATING A SHORTCUTTED PATH")
+        # print(f"Original path length: {len(path)}")
         i = 0
         new_path = [path[0]]
 
         while i < len(path) - 1:
             found = False
             for j in range(len(path) - 1, i, -1):
-                if self.is_collision_free(path[i], path[j]):
+                if self.collision_checker.is_collision_free(path[i], path[j]):
                     new_path.append(path[j])
                     i = j
                     found = True
@@ -486,5 +389,5 @@ class PathPostProcessing:
             if not found:
                 new_path.append(path[i + 1])
                 i += 1
-        print(f"Shortcutted path length: {len(new_path)}")
+        # print(f"Shortcutted path length: {len(new_path)}")
         return new_path
