@@ -30,7 +30,8 @@ class PRMRoadmapBuilder:
                     k_neighbors: int = 5,
                     weights: list = [1.0]*7,
                     path_to_save: str = "prm_roadmap.npz",
-                    restrict_to_task_space: bool = False):
+                    restrict_to_task_space: bool = False,
+                    limit_tool_orientation: bool = False):
 
         self.robot_model = robot_model
         self.collision_checker = collision_checker
@@ -39,6 +40,7 @@ class PRMRoadmapBuilder:
         self.weights = weights
         self.path_to_save = path_to_save
         self.restrict_to_task_space = restrict_to_task_space
+        self.limit_tool_orientation = limit_tool_orientation
         self.roadmap = {}
         self.kdtree = None
         self.next_node_id = 0
@@ -63,8 +65,10 @@ class PRMRoadmapBuilder:
         while len(valid_configs) < self.n_nodes:
             if i % 1000 == 0:
                 print(f"Sampling node {len(valid_configs)}/{self.n_nodes}")
-            if self.restrict_to_task_space:
+            if self.restrict_to_task_space and not self.limit_tool_orientation:
                 q = self.robot_model.sample_random_configuration_in_task_space()
+            elif self.restrict_to_task_space and self.limit_tool_orientation:
+                q = self.robot_model.sample_random_configuration_in_task_space_with_limited_tool_orientation()
             else:
                 q = self.robot_model.sample_random_configuration()
             if self.robot_model.is_within_limits(q):# and not self.collision_checker.is_in_collision(q):
@@ -179,16 +183,19 @@ if __name__ == "__main__":
     collision_checker = CollisionChecker()  # Replace with actual collision checker initialization
 
     #roadmap_name = "roadmap-restricted-collision-enabled-sampl_1000-k_5-step_01-w_1_1_08_05_01_01_01.npz"
-    roadmap_name = "roadmap-restricted-collision-enabled-sampl_1000-k_5-step_01-w_1_1_1_1_1_1_1.npz"
+    #roadmap_name = "roadmap-restricted-collision-enabled-sampl_1000-k_5-step_01-w_1_1_1_1_1_1_1.npz"
+    roadmap_name = "roadmap-fixed-tool-with-obstacle-sampl_10000-k_10-step_01-w_1_1_1_1_1_1_1.npz"
+
     #weights = [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Example weights for each joint
     weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Default weights for all joints
     roadmap_builder = PRMRoadmapBuilder(robot_model = robot_model,
                                         collision_checker = collision_checker,
-                                        n_nodes = 1000,
-                                        k_neighbors = 5,
+                                        n_nodes = 10000,
+                                        k_neighbors = 10,
                                         weights = weights,
                                         path_to_save = roadmap_name,
-                                        restrict_to_task_space=True)
+                                        restrict_to_task_space=True,
+                                        limit_tool_orientation=True)
 
     # Build the roadmap
     roadmap_builder.build_roadmap()

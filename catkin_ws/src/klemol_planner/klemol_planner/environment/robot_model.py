@@ -170,6 +170,33 @@ class Robot:
             if config is not None and self.is_within_limits(config):
                 return config
 
+    def sample_random_configuration_in_task_space_with_limited_tool_orientation(self, obstacle = None) -> np.ndarray:
+        """
+        Sample a random joint configuration that is within the task space defined by the end-effector pose,
+        with limited tool orientation.
+
+        Returns:
+            Random joint configuration (7D np.ndarray)
+        """
+        x_range = (0.1, 0.7)
+        y_range = (-0.4, 0.4)
+        z_range = (0.17, 0.5)
+        
+        while True:
+            x = np.random.uniform(*x_range)
+            y = np.random.uniform(*y_range)
+            z = np.random.uniform(*z_range)
+            roll = np.random.uniform(-np.pi-0.01, -np.pi+0.01)
+            pitch = np.random.uniform(-0.01, 0.01)
+            yaw = np.random.uniform(-np.pi, np.pi)
+
+            # Get ik solution for random sampled pose
+            pose = PointWithOrientation(x=x, y=y, z=z, roll=roll, pitch=pitch, yaw=yaw)
+            config = self.ik(pose)
+
+            if config is not None and self.is_within_limits(config):
+                return config
+
     def is_within_limits(self, config: np.ndarray) -> bool:
         """
         Check whether the joint configuration is within bounds.
@@ -357,7 +384,7 @@ class Robot:
                     seed=seed
                 )
                 path.append(pose_to_append)
-
+ 
         logger.planning_time = logger.stop_timer()
         logger.number_of_waypoints_before_post_processing = len(path)
 
@@ -367,7 +394,7 @@ class Robot:
             rospy.loginfo(f"Fitting spline to the path...")
             # Smooth the path and execute smooth trajectory
             logger.spline_fitting_start_time = logger.stop_timer()
-            trajectory = post_processing.interpolate_quintic_trajectory(
+            trajectory = post_processing.interpolate_quintic_bspline_trajectory(
                 path=path,
                 joint_names=self.group.get_active_joints(),
                 velocity_limits=self.velocity_limits,

@@ -9,8 +9,10 @@ import std_msgs.msg
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 import scipy.interpolate
 from std_msgs.msg import Header
-from scipy.interpolate import make_interp_spline
-from scipy.interpolate import CubicHermiteSpline
+from scipy.interpolate import make_interp_spline, CubicHermiteSpline, BSpline
+
+
+from scipy.interpolate import BPoly
 
 import rospy
 import math
@@ -60,7 +62,181 @@ class PathPostProcessing:
 
         return traj_msg
 
-    def interpolate_quintic_trajectory(
+    # def interpolate_quintic_polynomial_trajectory(
+    #     self,
+    #     path: t.List[np.ndarray],
+    #     joint_names: t.List[str],
+    #     velocity_limits: np.ndarray,
+    #     acceleration_limits: np.ndarray,
+    #     dt: float = 0.005,
+    #     max_vel_acc_multiplier: float = 0.1
+    # ) -> JointTrajectory:
+    #     """
+    #     True quintic spline interpolation for joint-space trajectory.
+
+    #     Estimates position, velocity, and acceleration at waypoints, and interpolates
+    #     with 5th-order splines.
+
+    #     Args:
+    #         path: List of joint configurations.
+    #         joint_names: Joint names.
+    #         velocity_limits: Max joint velocities.
+    #         get_current_joint_values: Callable to get current joint config.
+    #         dt: Sampling interval.
+    #         safety_margin: Multiplier <1.0 to stay below limits.
+
+    #     Returns:
+    #         JointTrajectory message.
+    #     """
+    #     joint_reader = JointStatesReader(joint_names)
+
+    #     # Wait until the first message arrives
+    #     while joint_reader.latest_state is None and not rospy.is_shutdown():
+    #         rospy.sleep(0.05)
+
+
+    #     q_current = joint_reader.get_current_positions()
+    #     qdot_current = joint_reader.get_current_velocities()
+
+    #     # Combine initial position with path
+    #     q = np.array([q_current] + list(path)) # TODO REMOVE q_current if real robot is not working
+    #     n_waypoints = len(q)
+    #     n_joints = len(joint_names)
+
+    #     # --- Time allocation ---
+    #     times = [0.0]
+    #     v_max = velocity_limits * max_vel_acc_multiplier
+    #     a_max = acceleration_limits * max_vel_acc_multiplier
+
+    #     for i in range(1, n_waypoints):
+    #         delta_q = np.abs(q[i] - q[i - 1])
+
+    #         if delta_q.max() < 1e-6:
+    #             # If the joint positions are very close, skip this waypoint
+    #             times.append(0.1)
+    #             rospy.logwarn(f"Skipping waypoint {i} due to negligible joint movement.")
+    #             continue
+
+    #         t_required = self._calculate_min_time_linear_movement(delta_q=delta_q,
+    #                                                               v_max = v_max,
+    #                                                               a_max = a_max) #np.max(np.maximum(t_vel, t_acc))
+    #         times.append(times[-1] + max(t_required, 0.1))
+
+    #     times = np.array(times)
+    #     # print(f"======== TIMES TIMES TIMES ========\n{times}\n======== TIMES TIMES TIMES ========")
+
+    #     splines = []
+    #     for j in range(n_joints):
+    #         # Zero velocity and acceleration at all waypoints
+    #         derivatives = [[q[i, j], 0.0, 0.0] for i in range(n_waypoints)]  # pos, vel, acc at each point
+
+    #         spline = BPoly.from_derivatives(times, derivatives)
+    #         splines.append(spline)
+
+    #     traj_msg = JointTrajectory()
+    #     traj_msg.joint_names = joint_names
+    #     traj_msg.header = Header()
+
+    #     # # Sample from 0.1s onward
+    #     # # start_time_offset = 0.1
+    #     # times = 5
+    #     t_samples = np.arange(0, times[-1] + dt, dt)
+
+    #     for t_val in t_samples:
+    #         point = JointTrajectoryPoint()
+    #         point.positions = [spline(t_val) for spline in splines]
+    #         point.velocities = [spline.derivative(1)(t_val) for spline in splines]
+    #         point.accelerations = [spline.derivative(2)(t_val) for spline in splines]
+    #         point.time_from_start = rospy.Duration.from_sec(t_val)
+    #         traj_msg.points.append(point)
+
+    #     traj_msg.header.stamp = rospy.Time.now() + rospy.Duration(0.3) #TODO Increase this in case of weird robot noises
+
+    #     return traj_msg
+
+    def generate_quintic_bspline_trajectory(
+        self,
+        path: t.List[np.ndarray],
+        joint_names: t.List[str],
+        velocity_limits: np.ndarray,
+        acceleration_limits: np.ndarray,
+        dt: float = 0.005,
+        max_vel_acc_multiplier: float = 0.1
+    ) -> JointTrajectory:
+        """
+        Approximates joint-space trajectory using a quintic B-spline (order 5, degree 5).
+        This is NOT interpolating; the path is approximated using control points.
+
+        Args:
+            path: List of joint configurations (control points).
+            joint_names: Joint names.
+            velocity_limits: Max joint velocities.
+            acceleration_limits: Max joint accelerations.
+            dt: Sampling interval.
+            max_vel_acc_multiplier: Multiplier to reduce speed/acceleration.
+
+        Returns:
+            JointTrajectory message.
+        """
+        joint_reader = JointStatesReader(joint_names)
+
+        while joint_reader.latest_state is None and not rospy.is_shutdown():
+            rospy.sleep(0.05)
+
+        q_current = joint_reader.get_current_positions()
+        q = np.array([q_current] + list(path))  # shape: (n_points, n_joints)
+
+        n_ctrl_points = q.shape[0]
+        n_joints = q.shape[1]
+        degree = 5 # THIS MAKES IT QUINTIC
+        k = degree
+
+        if n_ctrl_points <= k:
+            raise ValueError(f"Need at least {k+1} control points for quintic B-spline (got {n_ctrl_points})")
+
+        # --- Knot vector (open uniform clamped) ---
+        # Add degree multiplicity at start and end to clamp the curve
+        knots = np.concatenate((
+            np.zeros(k),
+            np.linspace(0, 1, n_ctrl_points - k + 1),
+            np.ones(k)
+        ))
+
+        splines = []
+        for j in range(n_joints):
+            ctrl = q[:, j]
+            spline = BSpline(knots, ctrl, k)
+            splines.append(spline)
+
+        # --- Time allocation ---
+        total_time = 0.0
+        v_max = velocity_limits * max_vel_acc_multiplier
+        a_max = acceleration_limits * max_vel_acc_multiplier
+
+        for i in range(1, len(q)):
+            delta_q = np.abs(q[i] - q[i - 1])
+            t_required = self._calculate_min_time_linear_movement(delta_q, v_max, a_max)
+            total_time += max(t_required, 0.1)
+
+        t_samples = np.arange(0, total_time + dt, dt)
+        u_samples = np.linspace(0, 1, len(t_samples))  # parametric domain
+
+        traj_msg = JointTrajectory()
+        traj_msg.joint_names = joint_names
+        traj_msg.header = Header()
+
+        for i, u in enumerate(u_samples):
+            point = JointTrajectoryPoint()
+            point.positions = [s(u) for s in splines]
+            point.velocities = [s.derivative(1)(u) for s in splines]
+            point.accelerations = [s.derivative(2)(u) for s in splines]
+            point.time_from_start = rospy.Duration.from_sec(i * dt)
+            traj_msg.points.append(point)
+
+        traj_msg.header.stamp = rospy.Time.now() + rospy.Duration(0.3)
+        return traj_msg
+
+    def generate_quintic_polynomial_trajectory(
         self,
         path: t.List[np.ndarray],
         joint_names: t.List[str],
@@ -97,7 +273,7 @@ class PathPostProcessing:
         qdot_current = joint_reader.get_current_velocities()
 
         # Combine initial position with path
-        q = np.array(list(path))
+        q = np.array([q_current] + list(path)) # TODO REMOVE q_current if real robot is not working
         n_waypoints = len(q)
         n_joints = len(joint_names)
 
@@ -118,7 +294,7 @@ class PathPostProcessing:
             t_required = self._calculate_min_time_linear_movement(delta_q=delta_q,
                                                                   v_max = v_max,
                                                                   a_max = a_max) #np.max(np.maximum(t_vel, t_acc))
-            times.append(times[-1] + max(t_required, 0.4))
+            times.append(times[-1] + max(t_required, 0.1))
 
         times = np.array(times)
         # print(f"======== TIMES TIMES TIMES ========\n{times}\n======== TIMES TIMES TIMES ========")
@@ -158,73 +334,14 @@ class PathPostProcessing:
         return traj_msg
 
 
-    # SIMPLIFIED
-    def _calculate_min_time_linear_movement(self,
-                                       delta_q: np.ndarray,
-                                       v_max: np.ndarray,
-                                       a_max: np.ndarray) -> float: #t.Tuple[float, np.ndarray, np.ndarray]:
-        """
-        Calculate the minimum time required to move delta_q (float - one joint at the time),
-        considering joint velocity and acceleration limits. Minimum required time is defined
-        in the following way:
-        1. Calculate the minimum moving time for each joint
-        2. Get the max out of the min times.
-
-        Acceleration limits are in the robot model itself (each joint has a different limits).
-
-        Note:
-            Equation to find a time in linear motion with vel and acc has 2 solutions
-            We know vel and acc will be positive, therefore we should always add a square root,
-            thus taking a solution "from the future"
-
-        Returns:
-            time: time required for a movement
-            velocities: velocities at the end of movement
-            accelerations: accelerations at the end of movement
-        """
-        # Check if we will reach a max speed while moving between waypoints.
-        # print(f"A MAX => {a_max} | DELTA Q = {delta_q}")
-
-        times_required = np.zeros(7)
-
-        for joint in range(7):
-            possible_velocity = math.sqrt(2 * a_max[joint] * delta_q[joint])
-
-            # If v_possible <= v_max we will be accelerating for the entire movement duration, calculate this time.
-            if possible_velocity <= v_max[joint]:
-                t_required = math.sqrt((2 * a_max[joint]) / (delta_q[joint]))
-            else:
-                # Check how much time does it take to accelerate to the max speed
-                t_first_part = v_max[joint] / a_max[joint]
-
-                # Check how much way does it take to accelerate to the max speed
-                s_first_part = (a_max[joint] * t_first_part * t_first_part) / 2.0
-
-                # Check how much time does it take to move the remaining distance with the max speed
-                s_second_part = delta_q[joint] - s_first_part
-                t_second_part = s_second_part / v_max[joint]
-
-                times_required[joint] = t_first_part + t_second_part
-
-
-        # Considering the longest time, what would be the final speed and acceleration for every joint
-        # TODO
-
-        # t_required - float
-        # end_v - numpy array (7 elements)
-        # end_acc - numpy array (7 elements)
-
-        # print(f"TIMES REQUIRED: {times_required}")
-        t_required = times_required.max()
-        return t_required
-
-    def interpolate_trajectory_with_cubic_hermite_splines(
+    def generate_cubic_trajectory(
         self,
         path: t.List[np.ndarray],
         joint_names: t.List[str],
         velocity_limits: np.ndarray,
+        acceleration_limits: np.ndarray,
         dt: float = 0.005,
-        safety_margin: float = 0.9
+        max_vel_acc_multiplier: float = 0.1
     ) -> JointTrajectory:
         """
         Time-parameterized Cubic spline interpolation with velocity constraints,
@@ -258,15 +375,29 @@ class PathPostProcessing:
 
         # --- Time allocation ---
         times = [0.0]
+        v_max = velocity_limits * max_vel_acc_multiplier
+        a_max = acceleration_limits * max_vel_acc_multiplier
+
         for i in range(1, n_waypoints):
             delta_q = np.abs(q[i] - q[i - 1])
-            t_required = np.max(delta_q / (velocity_limits * safety_margin))
-            times.append(times[-1] + max(t_required, 0.4))  # min segment time
+
+            if delta_q.max() < 1e-6:
+                # If the joint positions are very close, skip this waypoint
+                times.append(0.1)
+                rospy.logwarn(f"Skipping waypoint {i} due to negligible joint movement.")
+                continue
+
+            t_required = self._calculate_min_time_linear_movement(delta_q=delta_q,
+                                                                  v_max = v_max,
+                                                                  a_max = a_max) #np.max(np.maximum(t_vel, t_acc))
+            times.append(times[-1] + max(t_required, 0.1))
+
+
         times = np.array(times)
 
         # --- Estimate velocities ---
         vel = np.zeros_like(q)
-        vel[0] = np.clip(qdot_current, -velocity_limits * safety_margin, velocity_limits * safety_margin)
+        vel[0] = np.clip(qdot_current, -velocity_limits * max_vel_acc_multiplier, velocity_limits * max_vel_acc_multiplier)
 
         for i in range(1, n_waypoints - 1):
             dt1 = times[i] - times[i - 1]
@@ -277,7 +408,7 @@ class PathPostProcessing:
 
         # Clamp intermediate velocities
         for i in range(1, n_waypoints):
-            vel[i] = np.clip(vel[i], -velocity_limits * safety_margin, velocity_limits * safety_margin)
+            vel[i] = np.clip(vel[i], -velocity_limits * max_vel_acc_multiplier, velocity_limits * max_vel_acc_multiplier)
 
         # --- Fit cubic Hermite splines per joint ---
         splines = [
@@ -307,6 +438,54 @@ class PathPostProcessing:
         # print("First point time_from_start:", traj_msg.points[0].time_from_start.to_sec())
         # print("ROS now:", rospy.Time.now().to_sec())
         return traj_msg
+
+    # SIMPLIFIED
+    def _calculate_min_time_linear_movement(self,
+                                            delta_q: np.ndarray,
+                                            v_max: np.ndarray,
+                                            a_max: np.ndarray) -> float:
+        """
+        Compute minimum duration to move through delta_q, accounting for acceleration + cruise.
+
+        Returns:
+            Maximum joint-wise time required to complete the motion safely.
+        """
+        times_required = np.zeros(7)
+
+        for joint in range(7):
+            dq = abs(delta_q[joint])
+            vmax = v_max[joint]
+            amax = a_max[joint]
+
+            # Velocity we could reach if only accelerating
+            v_possible = math.sqrt(2 * amax * dq)
+
+            if v_possible <= vmax:
+                # Triangular profile (accelerate then decelerate)
+                t_required = math.sqrt(2 * dq / amax)
+            else:
+                # Trapezoidal profile (accel + cruise + decel)
+                t_accel = vmax / amax
+                s_accel = 0.5 * amax * t_accel ** 2
+                s_cruise = dq - 2 * s_accel
+                t_cruise = s_cruise / vmax if s_cruise > 0 else 0.0
+                t_required = 2 * t_accel + t_cruise
+
+            times_required[joint] = t_required
+
+        return np.max(times_required)
+
+        # Considering the longest time, what would be the final speed and acceleration for every joint
+        # TODO
+
+        # t_required - float
+        # end_v - numpy array (7 elements)
+        # end_acc - numpy array (7 elements)
+
+        # print(f"TIMES REQUIRED: {times_required}")
+        t_required = times_required.max()
+        return t_required
+
 
     def interpolate_trajectory_time_parameterised(self, path: t.List[np.ndarray], joint_names: t.List[str], dt: float = 1.05) -> JointTrajectory:
         """

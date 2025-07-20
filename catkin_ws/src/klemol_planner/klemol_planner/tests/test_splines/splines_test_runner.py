@@ -11,9 +11,9 @@ if __name__ == "__main__":
     rospy.init_node("franka_motion_controller")
     moveit_commander.roscpp_initialize([])
     robot_model = Robot()
-    collision_checker = CollisionChecker(robot_model, group_name="panda_arm")
-    logger = TrajectoryLogger()
-    executor = SplinesTestExecutor(collision_checker, logger)
+    collision_checker = CollisionChecker(group_name="panda_arm")
+    logger = TrajectoryLogger(robot_model=robot_model)
+    executor = SplinesTestExecutor(robot_model, collision_checker, logger)
 
     start_joint_config = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]
 
@@ -22,20 +22,25 @@ if __name__ == "__main__":
     # for i, limit in enumerate(velocity_limits):
     #     velocity_limits[i] = limit * 0.25
 
-    # Standard motion
-    robot_model.move_to_joint_config(start_joint_config)
-    rospy.sleep(2)
-    executor.run_test(mode="raw", velocity_limits=velocity_limits)
+    # # Standard motion
+    # robot_model.move_to_joint_config(start_joint_config)
+    # rospy.sleep(2)
+    # executor.run_test(mode="raw")
 
     # Cubic splines
     robot_model.move_to_joint_config(start_joint_config)
     rospy.sleep(2)
-    executor.run_test(mode="spline_cubic_hermite", velocity_limits=velocity_limits)
+    executor.run_test(mode="spline_cubic_hermite")
 
-    # Quintic splines
+    # Quintic splines (bsplines)
     robot_model.move_to_joint_config(start_joint_config)
     rospy.sleep(2)
-    executor.run_test(mode="spline_quintic", velocity_limits=velocity_limits)
+    executor.run_test(mode="spline_quintic_bsplines")
 
-    logger.save("/tmp/franka_motion_comparison.npz")
+    # Quintic polynomial splines
+    robot_model.move_to_joint_config(start_joint_config)
+    rospy.sleep(2)
+    executor.run_test(mode="spline_quintic_polynomial")
+
+    logger.save("/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/splines_results/splines_results.npz")
     rospy.loginfo("Data saved for post-analysis.")

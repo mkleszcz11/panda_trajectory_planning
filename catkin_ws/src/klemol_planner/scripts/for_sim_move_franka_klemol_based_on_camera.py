@@ -137,7 +137,7 @@ class FrankaMotionController:
             rospy.loginfo(f"Planner found path with {len(path)} waypoints.")
             rospy.loginfo(f"Fitting spline to the path...")
             # Smooth the path and execute smooth trajectory
-            trajectory = path_post_processing.interpolate_quintic_trajectory(
+            trajectory = path_post_processing.interpolate_quintic_bspline_trajectory(
                 path=path,
                 joint_names=self.robot_model.group.get_active_joints(),
                 velocity_limits=self.robot_model.velocity_limits,

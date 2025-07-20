@@ -1,280 +1,289 @@
-# rrt-step_02-bias_02:
-#   planner_type: "rrt"
-#   planner_params:
-#     step_size: 0.2
-#     bias: 0.2
-#     max_iterations: 20000
-#     max_time: 25.0
+# # rrt-step_02-bias_02:
+# #   planner_type: "rrt"
+# #   planner_params:
+# #     step_size: 0.2
+# #     bias: 0.2
+# #     max_iterations: 20000
+# #     max_time: 25.0
 
-# rrt-step_04-bias_02:
-#   planner_type: "rrt"
-#   planner_params:
-#     step_size: 0.3
-#     bias: 0.2
-#     max_iterations: 20000
-#     max_time: 25.0
+# # rrt-step_04-bias_02:
+# #   planner_type: "rrt"
+# #   planner_params:
+# #     step_size: 0.3
+# #     bias: 0.2
+# #     max_iterations: 20000
+# #     max_time: 25.0
 
-# rrt-step_06-bias_02:
-#   planner_type: "rrt"
-#   planner_params:
-#     step_size: 0.6
-#     bias: 0.2
-#     max_iterations: 20000
-#     max_time: 25.0
+# # rrt-step_06-bias_02:
+# #   planner_type: "rrt"
+# #   planner_params:
+# #     step_size: 0.6
+# #     bias: 0.2
+# #     max_iterations: 20000
+# #     max_time: 25.0
 
-# rrt-step_02-bias_04:
-#   planner_type: "rrt"
-#   planner_params:
-#     step_size: 0.2
-#     bias: 0.4
-#     max_iterations: 20000
-#     max_time: 25.0
+# # rrt-step_02-bias_04:
+# #   planner_type: "rrt"
+# #   planner_params:
+# #     step_size: 0.2
+# #     bias: 0.4
+# #     max_iterations: 20000
+# #     max_time: 25.0
 
-# rrt-step_04-bias_04:
-#   planner_type: "rrt"
-#   planner_params:
-#     step_size: 0.3
-#     bias: 0.4
-#     max_iterations: 20000
-#     max_time: 25.0
+# # rrt-step_04-bias_04:
+# #   planner_type: "rrt"
+# #   planner_params:
+# #     step_size: 0.3
+# #     bias: 0.4
+# #     max_iterations: 20000
+# #     max_time: 25.0
 
-# rrt-step_06-bias_04:
-#   planner_type: "rrt"
-#   planner_params:
-#     step_size: 0.6
-#     bias: 0.4
-#     max_iterations: 20000
-#     max_time: 25.0
+# # rrt-step_06-bias_04:
+# #   planner_type: "rrt"
+# #   planner_params:
+# #     step_size: 0.6
+# #     bias: 0.4
+# #     max_iterations: 20000
+# #     max_time: 25.0
 
-# rrt_star-step_02-bias_02-rewire_061:
-#   planner_type: "rrt_star"
-#   planner_params:
-#     step_size: 0.2
-#     max_iterations: 20000
-#     bias: 0.2
-#     rewire_radius: 0.61
-#     max_time: 25.0
+# # rrt_star-step_02-bias_02-rewire_061:
+# #   planner_type: "rrt_star"
+# #   planner_params:
+# #     step_size: 0.2
+# #     max_iterations: 20000
+# #     bias: 0.2
+# #     rewire_radius: 0.61
+# #     max_time: 25.0
 
-# rrt_star-step_04-bias_02-rewire_081:
-#   planner_type: "rrt_star"
-#   planner_params:
-#     step_size: 0.4
-#     max_iterations: 20000
-#     bias: 0.2
-#     rewire_radius: 0.81
-#     max_time: 25.0
+# # rrt_star-step_04-bias_02-rewire_081:
+# #   planner_type: "rrt_star"
+# #   planner_params:
+# #     step_size: 0.4
+# #     max_iterations: 20000
+# #     bias: 0.2
+# #     rewire_radius: 0.81
+# #     max_time: 25.0
 
-# rrt_star-step_06-bias_02-rewire_121:
-#   planner_type: "rrt_star"
-#   planner_params:
-#     step_size: 0.6
-#     max_iterations: 20000
-#     bias: 0.2
-#     rewire_radius: 1.21
-#     max_time: 25.0
+# # rrt_star-step_06-bias_02-rewire_121:
+# #   planner_type: "rrt_star"
+# #   planner_params:
+# #     step_size: 0.6
+# #     max_iterations: 20000
+# #     bias: 0.2
+# #     rewire_radius: 1.21
+# #     max_time: 25.0
 
-# rrt_star-step_04-bias_04-rewire_081:
-#   planner_type: "rrt_star"
-#   planner_params:
-#     step_size: 0.4
-#     max_iterations: 20000
-#     bias: 0.4
-#     rewire_radius: 0.81
-#     max_time: 25.0
+# # rrt_star-step_04-bias_04-rewire_081:
+# #   planner_type: "rrt_star"
+# #   planner_params:
+# #     step_size: 0.4
+# #     max_iterations: 20000
+# #     bias: 0.4
+# #     rewire_radius: 0.81
+# #     max_time: 25.0
 
-# rrt_star-step_06-bias_04-rewire_121:
-#   planner_type: "rrt_star"
-#   planner_params:
-#     step_size: 0.6
-#     max_iterations: 20000
-#     bias: 0.4
-#     rewire_radius: 1.21
-#     max_time: 25.0
+# # rrt_star-step_06-bias_04-rewire_121:
+# #   planner_type: "rrt_star"
+# #   planner_params:
+# #     step_size: 0.6
+# #     max_iterations: 20000
+# #     bias: 0.4
+# #     rewire_radius: 1.21
+# #     max_time: 25.0
 
-# rrt_with_connecting-step_02-bias_02:
-#   planner_type: "rrt_with_connecting"
-#   planner_params:
-#     step_size: 0.2
-#     bias: 0.2
-#     max_iterations: 20000
-#     max_time: 25.0
+# # rrt_with_connecting-step_02-bias_02:
+# #   planner_type: "rrt_with_connecting"
+# #   planner_params:
+# #     step_size: 0.2
+# #     bias: 0.2
+# #     max_iterations: 20000
+# #     max_time: 25.0
 
-# rrt_with_connecting-step_04-bias_02:
-#   planner_type: "rrt_with_connecting"
-#   planner_params:
-#     step_size: 0.3
-#     bias: 0.2
-#     max_iterations: 20000
-#     max_time: 25.0
+# # rrt_with_connecting-step_04-bias_02:
+# #   planner_type: "rrt_with_connecting"
+# #   planner_params:
+# #     step_size: 0.3
+# #     bias: 0.2
+# #     max_iterations: 20000
+# #     max_time: 25.0
 
-# rrt_with_connecting-step_01-bias_01:
-#   planner_type: "rrt_with_connecting"
-#   planner_params:
-#     step_size: 0.1
-#     bias: 0.1
-#     max_iterations: 20000
-#     max_time: 25.0
+# # rrt_with_connecting-step_01-bias_01:
+# #   planner_type: "rrt_with_connecting"
+# #   planner_params:
+# #     step_size: 0.1
+# #     bias: 0.1
+# #     max_iterations: 20000
+# #     max_time: 25.0
 
-# rrt_with_connecting-step_06-bias_06:
-#   planner_type: "rrt_with_connecting"
-#   planner_params:
-#     step_size: 0.6
-#     bias: 0.6
-#     max_iterations: 20000
-#     max_time: 25.0
+# # rrt_with_connecting-step_06-bias_06:
+# #   planner_type: "rrt_with_connecting"
+# #   planner_params:
+# #     step_size: 0.6
+# #     bias: 0.6
+# #     max_iterations: 20000
+# #     max_time: 25.0
 
-##################################
-### ONLY PRM FOR OBSTACLE TEST ###
-##################################
-prm_1000_samples_not_restricted:
-  planner_type: "prm"
-  planner_params:
-    roadmap_name: "roadmap-restricted-collision-enabled-sampl_1000-k_5-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
-    weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Joint-space weights
-
-prm_10000_samples_not_restricted:
-  planner_type: "prm"
-  planner_params:
-    roadmap_name: "roadmap-restricted-collision-enabled-sampl_10000-k_5-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
-    weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Joint-space weights
-
-prm_100000_samples_not_restricted:
-  planner_type: "prm"
-  planner_params:
-    roadmap_name: "roadmap-restricted-collision-enabled-sampl_100000-k_5-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
-    weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Joint-space weights
-
-prm_1000_samples_not_restricted:
-  planner_type: "prm"
-  planner_params:
-    roadmap_name: "roadmap-restricted-collision-enabled-sampl_1000-k_5-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
-    weights: [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Joint-space weights
-
-prm_10000_samples_not_restricted:
-  planner_type: "prm"
-  planner_params:
-    roadmap_name: "roadmap-restricted-collision-enabled-sampl_10000-k_5-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
-    weights: [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Joint-space weights
-
-prm_100000_samples_not_restricted:
-  planner_type: "prm"
-  planner_params:
-    roadmap_name: "roadmap-restricted-collision-enabled-sampl_100000-k_5-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
-    weights: [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Joint-space weights
-
-
-##################################
-##################################
-##################################
-
-# # Standard weights for PRM planners
+# ##################################
+# ### ONLY PRM FOR OBSTACLE TEST ###
+# ##################################
 # prm_1000_samples_not_restricted:
 #   planner_type: "prm"
 #   planner_params:
-#     roadmap_name: "roadmap-sampl_1000-k_10-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
+#     roadmap_name: "roadmap-restricted-collision-enabled-sampl_1000-k_5-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
 #     weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Joint-space weights
 
 # prm_10000_samples_not_restricted:
 #   planner_type: "prm"
 #   planner_params:
-#     roadmap_name: "roadmap-sampl_10000-k_10-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
+#     roadmap_name: "roadmap-restricted-collision-enabled-sampl_10000-k_5-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
 #     weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Joint-space weights
 
 # prm_100000_samples_not_restricted:
 #   planner_type: "prm"
 #   planner_params:
-#     roadmap_name: "roadmap-sampl_100000-k_10-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
-#     weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Joint-space weight
+#     roadmap_name: "roadmap-restricted-collision-enabled-sampl_100000-k_5-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
+#     weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Joint-space weights
 
-# # Different weights for PRM planners
 # prm_1000_samples_not_restricted_diff_w:
 #   planner_type: "prm"
 #   planner_params:
-#     roadmap_name: "roadmap-sampl_1000-k_10-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
+#     roadmap_name: "roadmap-restricted-collision-enabled-sampl_1000-k_5-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
 #     weights: [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Joint-space weights
 
 # prm_10000_samples_not_restricted_diff_w:
 #   planner_type: "prm"
 #   planner_params:
-#     roadmap_name: "roadmap-sampl_10000-k_10-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
+#     roadmap_name: "roadmap-restricted-collision-enabled-sampl_10000-k_5-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
 #     weights: [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Joint-space weights
 
 # prm_100000_samples_not_restricted_diff_w:
 #   planner_type: "prm"
 #   planner_params:
-#     roadmap_name: "roadmap-sampl_100000-k_10-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
-#     weights: [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Joint-space weight
-
-# # USE RESTRICTED ROADMAPS ONLY FOR TESTS WITHINGH THE TASK SPACE
-# prm_1000_samples_not_restricted_noc:
-#   planner_type: "prm"
-#   planner_params:
-#     roadmap_name: "roadmap-restricted-noc-sampl_1000-k_10-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
-#     weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Joint-space weights
-
-# prm_10000_samples_not_restricted_noc:
-#   planner_type: "prm"
-#   planner_params:
-#     roadmap_name: "roadmap-restricted-noc-sampl_10000-k_10-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
-#     weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Joint-space weights
-
-# prm_100000_samples_not_restricted_noc:
-#   planner_type: "prm"
-#   planner_params:
-#     roadmap_name: "roadmap-restricted-noc-sampl_100000-k_10-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
-#     weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Joint-space weight
-
-# prm_1000_diff_w_samples_restricted_noc: # DONE
-#   planner_type: "prm"
-#   planner_params:
-#     roadmap_name: "roadmap-restricted-noc-sampl_1000-k_10-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
-#     weights: [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Joint-space weights
-
-# prm_10000_diff_w_samples_restricted_noc:
-#   planner_type: "prm"
-#   planner_params:
-#     roadmap_name: "roadmap-restricted-noc-sampl_10000-k_10-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
-#     weights: [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Joint-space weights
-
-# prm_100000_diff_w_samples_restricted_noc:
-#   planner_type: "prm"
-#   planner_params:
-#     roadmap_name: "roadmap-restricted-noc-sampl_100000-k_10-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
+#     roadmap_name: "roadmap-restricted-collision-enabled-sampl_100000-k_5-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
 #     weights: [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Joint-space weights
 
 
-# prm_1000_samples_not_restricted:
-#   planner_type: "prm"
-#   planner_params:
-#     roadmap_name: "roadmap-restricted-sampl_1000-k_10-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
-#     weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Joint-space weights
+# ##################################
+# ##################################
+# ##################################
 
-# prm_10000_samples_not_restricted:
-#   planner_type: "prm"
-#   planner_params:
-#     roadmap_name: "roadmap-restricted-sampl_10000-k_10-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
-#     weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Joint-space weights
+# # # Standard weights for PRM planners
+# # prm_1000_samples_not_restricted:
+# #   planner_type: "prm"
+# #   planner_params:
+# #     roadmap_name: "roadmap-sampl_1000-k_10-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
+# #     weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Joint-space weights
 
-# prm_100000_samples_not_restricted:
-#   planner_type: "prm"
-#   planner_params:
-#     roadmap_name: "roadmap-restricted-sampl_100000-k_10-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
-#     weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Joint-space weight
+# # prm_10000_samples_not_restricted:
+# #   planner_type: "prm"
+# #   planner_params:
+# #     roadmap_name: "roadmap-sampl_10000-k_10-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
+# #     weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Joint-space weights
 
-# prm_1000_diff_w_samples_restricted: # DONE
-#   planner_type: "prm"
-#   planner_params:
-#     roadmap_name: "roadmap-restricted-sampl_1000-k_10-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
-#     weights: [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Joint-space weights
+# # prm_100000_samples_not_restricted:
+# #   planner_type: "prm"
+# #   planner_params:
+# #     roadmap_name: "roadmap-sampl_100000-k_10-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
+# #     weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Joint-space weight
 
-# prm_10000_diff_w_samples_restricted:
-#   planner_type: "prm"
-#   planner_params:
-#     roadmap_name: "roadmap-restricted-sampl_10000-k_10-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
-#     weights: [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Joint-space weights
+# # # Different weights for PRM planners
+# # prm_1000_samples_not_restricted_diff_w:
+# #   planner_type: "prm"
+# #   planner_params:
+# #     roadmap_name: "roadmap-sampl_1000-k_10-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
+# #     weights: [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Joint-space weights
 
-# prm_100000_diff_w_samples_restricted:
-#   planner_type: "prm"
-#   planner_params:
-#     roadmap_name: "roadmap-restricted-sampl_100000-k_10-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
-#     weights: [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Joint-space weights
+# # prm_10000_samples_not_restricted_diff_w:
+# #   planner_type: "prm"
+# #   planner_params:
+# #     roadmap_name: "roadmap-sampl_10000-k_10-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
+# #     weights: [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Joint-space weights
+
+# # prm_100000_samples_not_restricted_diff_w:
+# #   planner_type: "prm"
+# #   planner_params:
+# #     roadmap_name: "roadmap-sampl_100000-k_10-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
+# #     weights: [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Joint-space weight
+
+# # # USE RESTRICTED ROADMAPS ONLY FOR TESTS WITHINGH THE TASK SPACE
+# # prm_1000_samples_not_restricted_noc:
+# #   planner_type: "prm"
+# #   planner_params:
+# #     roadmap_name: "roadmap-restricted-noc-sampl_1000-k_10-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
+# #     weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Joint-space weights
+
+# # prm_10000_samples_not_restricted_noc:
+# #   planner_type: "prm"
+# #   planner_params:
+# #     roadmap_name: "roadmap-restricted-noc-sampl_10000-k_10-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
+# #     weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Joint-space weights
+
+# # prm_100000_samples_not_restricted_noc:
+# #   planner_type: "prm"
+# #   planner_params:
+# #     roadmap_name: "roadmap-restricted-noc-sampl_100000-k_10-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
+# #     weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Joint-space weight
+
+# # prm_1000_diff_w_samples_restricted_noc: # DONE
+# #   planner_type: "prm"
+# #   planner_params:
+# #     roadmap_name: "roadmap-restricted-noc-sampl_1000-k_10-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
+# #     weights: [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Joint-space weights
+
+# # prm_10000_diff_w_samples_restricted_noc:
+# #   planner_type: "prm"
+# #   planner_params:
+# #     roadmap_name: "roadmap-restricted-noc-sampl_10000-k_10-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
+# #     weights: [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Joint-space weights
+
+# # prm_100000_diff_w_samples_restricted_noc:
+# #   planner_type: "prm"
+# #   planner_params:
+# #     roadmap_name: "roadmap-restricted-noc-sampl_100000-k_10-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
+# #     weights: [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Joint-space weights
+
+
+# # prm_1000_samples_not_restricted:
+# #   planner_type: "prm"
+# #   planner_params:
+# #     roadmap_name: "roadmap-restricted-sampl_1000-k_10-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
+# #     weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Joint-space weights
+
+# # prm_10000_samples_not_restricted:
+# #   planner_type: "prm"
+# #   planner_params:
+# #     roadmap_name: "roadmap-restricted-sampl_10000-k_10-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
+# #     weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Joint-space weights
+
+# # prm_100000_samples_not_restricted:
+# #   planner_type: "prm"
+# #   planner_params:
+# #     roadmap_name: "roadmap-restricted-sampl_100000-k_10-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
+# #     weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Joint-space weight
+
+# # prm_1000_diff_w_samples_restricted: # DONE
+# #   planner_type: "prm"
+# #   planner_params:
+# #     roadmap_name: "roadmap-restricted-sampl_1000-k_10-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
+# #     weights: [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Joint-space weights
+
+# # prm_10000_diff_w_samples_restricted:
+# #   planner_type: "prm"
+# #   planner_params:
+# #     roadmap_name: "roadmap-restricted-sampl_10000-k_10-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
+# #     weights: [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Joint-space weights
+
+# # prm_100000_diff_w_samples_restricted:
+# #   planner_type: "prm"
+# #   planner_params:
+# #     roadmap_name: "roadmap-restricted-sampl_100000-k_10-step_01-w_1_1_08_05_01_01_01.npz"  # Name of the roadmap to use
+# #     weights: [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Joint-space weights
+
+
+
+prm_100000_samples_not_restricted_diff_w:
+  planner_type: "prm"
+  planner_params:
+    roadmap_name: "roadmap-fixed-tool-collision-enabled-sampl_1000-k_5-step_01-w_1_1_1_1_1_1_1.npz"  # Name of the roadmap to use
+    weights: [1.0, 1.0, 0.8, 0.5, 0.1, 0.1, 0.1]  # Joint-space weights
+
