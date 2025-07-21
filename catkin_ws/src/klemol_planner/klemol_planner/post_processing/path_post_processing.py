@@ -134,11 +134,13 @@ class PathPostProcessing:
         traj_msg.joint_names = joint_names
         traj_msg.header = Header()
 
+        scale = 1.0 / total_time
+
         for i, u in enumerate(u_samples):
             point = JointTrajectoryPoint()
             point.positions = [s(u) for s in splines]
-            point.velocities = [s.derivative(1)(u) for s in splines]
-            point.accelerations = [s.derivative(2)(u) for s in splines]
+            point.velocities = [s.derivative(1)(u) * scale for s in splines]
+            point.accelerations = [s.derivative(2)(u) * scale**2 for s in splines]
             point.time_from_start = rospy.Duration.from_sec(i * dt)
             traj_msg.points.append(point)
 

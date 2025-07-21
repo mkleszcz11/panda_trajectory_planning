@@ -9,7 +9,7 @@ import os
 
 
 if __name__ == "__main__":
-    ALPHA = 2
+    ALPHA = 1
     rospy.init_node("franka_motion_controller")
     moveit_commander.roscpp_initialize([])
     robot_model = Robot()
@@ -30,19 +30,19 @@ if __name__ == "__main__":
     # executor.run_test(mode="raw")
 
     # Cubic splines
-    robot_model.move_to_joint_config(start_joint_config)
-    rospy.sleep(2)
-    executor.run_test(mode="spline_cubic_hermite")
+    # robot_model.move_to_joint_config(start_joint_config)
+    # rospy.sleep(2)
+    # executor.run_test(mode="spline_cubic_hermite")
 
     # Quintic splines (bsplines)
     robot_model.move_to_joint_config(start_joint_config)
     rospy.sleep(2)
     executor.run_test(mode="spline_quintic_bsplines")
 
-    # Quintic polynomial splines
-    robot_model.move_to_joint_config(start_joint_config)
-    rospy.sleep(2)
-    executor.run_test(mode="spline_quintic_polynomial")
+    # # Quintic polynomial splines
+    # robot_model.move_to_joint_config(start_joint_config)
+    # rospy.sleep(2)
+    # executor.run_test(mode="spline_quintic_polynomial")
 
     file_path = f"/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/splines_results/alpha_{ALPHA}/splines_results.npz"
     dir_path = os.path.dirname(file_path)

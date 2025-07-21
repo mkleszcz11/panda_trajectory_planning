@@ -214,8 +214,9 @@ def plot_joint_trajectories_merged(data, robot, plots_dir):
 
         axs[3].set_xlabel("Time [s]")
         plt.tight_layout()
-        filename = os.path.join(plots_dir, "plot_joint_trajectories_merged", f"joint{joint_idx+1:02d}_merged.png")
-        plt.savefig(filename, dpi=300)
+        output_path = os.path.join(plots_dir, "plot_joint_trajectories_merged", f"joint{joint_idx+1:02d}_merged.png")
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        plt.savefig(output_path, dpi=300)
         plt.close()
 
 def plot_joint_trajectories_by_mode(results, robot, plots_dir):
@@ -250,8 +251,9 @@ def plot_joint_trajectories_by_mode(results, robot, plots_dir):
 
             axs[3].set_xlabel("Time [s]")
             plt.tight_layout()
-            filename = os.path.join(plots_dir, "plot_joint_trajectories_by_mode", f"{mode}_joint{joint_idx+1:02d}.png")
-            plt.savefig(filename, dpi=300)
+            output_path = os.path.join(plots_dir, "plot_joint_trajectories_by_mode", f"{mode}_joint{joint_idx+1:02d}.png")
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            plt.savefig(output_path, dpi=300)
             plt.close()
 
 def plot_joint_trajectories_all_on_separate_plots(results, robot, plots_dir):
@@ -288,8 +290,9 @@ def plot_joint_trajectories_all_on_separate_plots(results, robot, plots_dir):
 
         fig.suptitle(f"Trajectories – Joint {joint_idx + 1}", fontsize=16, y=0.995)
         plt.subplots_adjust(left=0.07, right=0.98, top=0.94, bottom=0.08, wspace=0.3, hspace=0.25)
-        plot_path = os.path.join(plots_dir, "plot_all_params_per_joint", f"joint{joint_idx + 1:02d}_grid.png")
-        plt.savefig(plot_path, dpi=300)
+        output_path = os.path.join(plots_dir, "plot_all_params_per_joint", f"joint{joint_idx + 1:02d}_grid.png")
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        plt.savefig(output_path, dpi=300)
         plt.close()
 
 def plot_all_parameters_stacked_by_spline(results, robot, plots_dir):
@@ -328,8 +331,9 @@ def plot_all_parameters_stacked_by_spline(results, robot, plots_dir):
         fig.suptitle(f"Joint {joint_idx + 1} – All Parameters by Spline", fontsize=16, y=0.995)
         plt.subplots_adjust(left=0.07, right=0.98, top=0.94, bottom=0.08, wspace=0.3, hspace=0.35)
 
-        plot_path = os.path.join(plots_dir, "plot_all_params_stacked_by_spline", f"joint{joint_idx + 1:02d}_flipped_grid.png")
-        plt.savefig(plot_path, dpi=300)
+        output_path = os.path.join(plots_dir, "plot_all_params_stacked_by_spline", f"joint{joint_idx + 1:02d}_flipped_grid.png")
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        plt.savefig(output_path, dpi=300)
         plt.close()
 
 def plot_all_joint_trajectories_all_splines_per_one_parameter(results, robot, plots_dir):
@@ -379,10 +383,11 @@ def plot_all_joint_trajectories_all_splines_per_one_parameter(results, robot, pl
         plt.subplots_adjust(left=0.07, right=0.98, top=0.94, bottom=0.08, wspace=0.3, hspace=0.3)
 
         plot_path = os.path.join(plots_dir, "plot_joint_trajectories_per_param", f"trajectories_param_{param_label.split()[0].lower()}.png")
+        os.makedirs(os.path.dirname(plot_path), exist_ok=True)
         plt.savefig(plot_path, dpi=300)
         plt.close()
 
-def plot_joint_trajectories_all_splines_per_one_parameter(results, robot):
+def plot_joint_trajectories_all_splines_per_one_parameter(results, robot, plots_dir):
     num_joints = 7
     param_labels = ["Position [rad]", "Velocity [rad/s]", "Acceleration [rad/s²]", "Jerk [rad/s³]"]
     param_colors = ["#ffb000", "#785ef0", "#dc267f", "#fe6100"]
@@ -415,10 +420,11 @@ def plot_joint_trajectories_all_splines_per_one_parameter(results, robot):
             plt.subplots_adjust(left=0.07, right=0.98, top=0.85, bottom=0.2, wspace=0.3)
 
             filename = os.path.join(
-                PLOTS_DIR,
+                plots_dir,
                 "plot_joint_trajectories_all_splines_per_one_parameter",
                 f"joint{joint_idx + 1:02d}_{param_label.split()[0].lower()}_sidebyside.png"
             )
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
             plt.savefig(filename, dpi=300)
             plt.close()
 
@@ -427,7 +433,7 @@ def load_extended_path(alpha: int) -> np.ndarray:
     return np.load(path_file, allow_pickle=True)
 
 def main():
-    alpha = 2
+    alpha = 1
     plots_dir = os.path.join(PLOTS_DIR, f"alpha_{alpha}")
     os.makedirs(plots_dir, exist_ok=True)
 
@@ -490,7 +496,7 @@ def main():
         extended_waypoints_in_3d=new_waypoints_in_3d,
         plots_dir=plots_dir,
     )
-    # print("3D EE trajectory plot saved.")
+    print("3D EE trajectory plot saved.")
 
     plot_2d_ee_projections(
         data=merged_data,
@@ -498,25 +504,25 @@ def main():
         extended_waypoints_3d=new_waypoints_in_3d,
         plots_dir=plots_dir,
     )
-    # print("2D EE projections plot saved.")
+    print("2D EE projections plot saved.")
 
-    # plot_joint_trajectories_merged(merged_data, robot, plots_dir=plots_dir)
-    # print("Merged joint trajectories plots saved.")
+    plot_joint_trajectories_merged(merged_data, robot, plots_dir=plots_dir)
+    print("Merged joint trajectories plots saved.")
 
-    # plot_joint_trajectories_by_mode(results, robot, plots_dir=plots_dir)
-    # print("Joint trajectories plots saved.")
+    plot_joint_trajectories_by_mode(results, robot, plots_dir=plots_dir)
+    print("Joint trajectories plots saved.")
 
-    # plot_joint_trajectories_all_on_separate_plots(results, robot, plots_dir=plots_dir)
-    # print("Joint trajectories on separate plots saved.")
+    plot_joint_trajectories_all_on_separate_plots(results, robot, plots_dir=plots_dir)
+    print("Joint trajectories on separate plots saved.")
 
-    # plot_all_joint_trajectories_all_splines_per_one_parameter(results, robot, plots_dir=plots_dir)
-    # print("Joint trajectories on separate plots v2 saved.")
+    plot_all_joint_trajectories_all_splines_per_one_parameter(results, robot, plots_dir=plots_dir)
+    print("Joint trajectories on separate plots v2 saved.")
 
-    # plot_joint_trajectories_all_splines_per_one_parameter(results, robot, plots_dir=plots_dir)
-    # print("Joint trajectories on separate plots v3 saved.")
+    plot_joint_trajectories_all_splines_per_one_parameter(results, robot, plots_dir=plots_dir)
+    print("Joint trajectories on separate plots v3 saved.")
 
-    # plot_all_parameters_stacked_by_spline(results, robot, plots_dir=plots_dir)
-    # print("All parameters stacked by spline plots saved.")
+    plot_all_parameters_stacked_by_spline(results, robot, plots_dir=plots_dir)
+    print("All parameters stacked by spline plots saved.")
 
 if __name__ == "__main__":
     main()
