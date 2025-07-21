@@ -12,7 +12,8 @@ from trac_ik_python.trac_ik import IK
 
 
 class SplinesTestExecutor:
-    def __init__(self, robot_model: Robot, collision_checker: CollisionChecker, logger):
+    def __init__(self, robot_model: Robot, collision_checker: CollisionChecker, logger, alpha: int = 1):
+        self.alpha = alpha
         self.robot_model = robot_model
         self.collision_checker = collision_checker
         self.logger = logger
@@ -39,10 +40,21 @@ class SplinesTestExecutor:
             np.array([-0.542, -0.626, 0.055, -2.502, 0.831, 2.165, 0.816]),
             np.array([-0.261, -0.068, -0.534, -2.334, -0.117, 2.260, -0.060]),
         ]
-        self.logger.final_joint_target = self.path[-1]  # needed for end condition
+        self.extended_path = self.load_extended_path(alpha=self.alpha)        # Set logger parameters# REMOVE THE FIRST WAYPOINT (self.extended_path[0]) IF IT IS NOT A STARTING POINT (start_joint_config)
+        self.extended_path = self.extended_path[1:]  # Remove the first waypoint if it's not a starting point
+
+        self.logger.final_joint_target = self.extended_path[-1]  # needed for end condition
         self.logger.position_threshold = 0.02  # radians, tune this if needed
 
+    def load_extended_path(self, alpha: int) -> np.ndarray:
+        path_file = f"/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/test_splines/extended_paths/extended_path_alpha_{alpha}.npy"
+        return np.load(path_file, allow_pickle=True)
+
     def run_test(self, mode: str = "raw"):
+
+        # COMMENT OUT TO DISABLE EXTENDED PATHS
+        self.path = self.extended_path
+
         rospy.loginfo(f"Running test in mode: {mode}")
         self.logger.set_mode(mode)
         self.logger.final_joint_target = self.path[-1]

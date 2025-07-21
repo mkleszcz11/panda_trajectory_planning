@@ -62,98 +62,6 @@ class PathPostProcessing:
 
         return traj_msg
 
-    # def interpolate_quintic_polynomial_trajectory(
-    #     self,
-    #     path: t.List[np.ndarray],
-    #     joint_names: t.List[str],
-    #     velocity_limits: np.ndarray,
-    #     acceleration_limits: np.ndarray,
-    #     dt: float = 0.005,
-    #     max_vel_acc_multiplier: float = 0.1
-    # ) -> JointTrajectory:
-    #     """
-    #     True quintic spline interpolation for joint-space trajectory.
-
-    #     Estimates position, velocity, and acceleration at waypoints, and interpolates
-    #     with 5th-order splines.
-
-    #     Args:
-    #         path: List of joint configurations.
-    #         joint_names: Joint names.
-    #         velocity_limits: Max joint velocities.
-    #         get_current_joint_values: Callable to get current joint config.
-    #         dt: Sampling interval.
-    #         safety_margin: Multiplier <1.0 to stay below limits.
-
-    #     Returns:
-    #         JointTrajectory message.
-    #     """
-    #     joint_reader = JointStatesReader(joint_names)
-
-    #     # Wait until the first message arrives
-    #     while joint_reader.latest_state is None and not rospy.is_shutdown():
-    #         rospy.sleep(0.05)
-
-
-    #     q_current = joint_reader.get_current_positions()
-    #     qdot_current = joint_reader.get_current_velocities()
-
-    #     # Combine initial position with path
-    #     q = np.array([q_current] + list(path)) # TODO REMOVE q_current if real robot is not working
-    #     n_waypoints = len(q)
-    #     n_joints = len(joint_names)
-
-    #     # --- Time allocation ---
-    #     times = [0.0]
-    #     v_max = velocity_limits * max_vel_acc_multiplier
-    #     a_max = acceleration_limits * max_vel_acc_multiplier
-
-    #     for i in range(1, n_waypoints):
-    #         delta_q = np.abs(q[i] - q[i - 1])
-
-    #         if delta_q.max() < 1e-6:
-    #             # If the joint positions are very close, skip this waypoint
-    #             times.append(0.1)
-    #             rospy.logwarn(f"Skipping waypoint {i} due to negligible joint movement.")
-    #             continue
-
-    #         t_required = self._calculate_min_time_linear_movement(delta_q=delta_q,
-    #                                                               v_max = v_max,
-    #                                                               a_max = a_max) #np.max(np.maximum(t_vel, t_acc))
-    #         times.append(times[-1] + max(t_required, 0.1))
-
-    #     times = np.array(times)
-    #     # print(f"======== TIMES TIMES TIMES ========\n{times}\n======== TIMES TIMES TIMES ========")
-
-    #     splines = []
-    #     for j in range(n_joints):
-    #         # Zero velocity and acceleration at all waypoints
-    #         derivatives = [[q[i, j], 0.0, 0.0] for i in range(n_waypoints)]  # pos, vel, acc at each point
-
-    #         spline = BPoly.from_derivatives(times, derivatives)
-    #         splines.append(spline)
-
-    #     traj_msg = JointTrajectory()
-    #     traj_msg.joint_names = joint_names
-    #     traj_msg.header = Header()
-
-    #     # # Sample from 0.1s onward
-    #     # # start_time_offset = 0.1
-    #     # times = 5
-    #     t_samples = np.arange(0, times[-1] + dt, dt)
-
-    #     for t_val in t_samples:
-    #         point = JointTrajectoryPoint()
-    #         point.positions = [spline(t_val) for spline in splines]
-    #         point.velocities = [spline.derivative(1)(t_val) for spline in splines]
-    #         point.accelerations = [spline.derivative(2)(t_val) for spline in splines]
-    #         point.time_from_start = rospy.Duration.from_sec(t_val)
-    #         traj_msg.points.append(point)
-
-    #     traj_msg.header.stamp = rospy.Time.now() + rospy.Duration(0.3) #TODO Increase this in case of weird robot noises
-
-    #     return traj_msg
-
     def generate_quintic_bspline_trajectory(
         self,
         path: t.List[np.ndarray],
@@ -184,7 +92,8 @@ class PathPostProcessing:
             rospy.sleep(0.05)
 
         q_current = joint_reader.get_current_positions()
-        q = np.array([q_current] + list(path))  # shape: (n_points, n_joints)
+        q = np.array([q_current]*3 + list(path) + [path[-1]]*2) 
+        # q = np.array([q_current] + list(path))  # shape: (n_points, n_joints)
 
         n_ctrl_points = q.shape[0]
         n_joints = q.shape[1]
