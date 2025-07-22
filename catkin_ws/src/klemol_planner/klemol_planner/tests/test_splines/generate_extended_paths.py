@@ -2,7 +2,7 @@ import numpy as np
 import os
 import typing as t
 
-OUTPUT_DIR = "/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/test_splines/extended_paths"  # make sure this exists or will be created
+OUTPUT_DIR = "/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/test_splines/extended_paths"  # make sure this exists or will be created
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def generate_extended_path(
@@ -49,7 +49,7 @@ def main():
     for alpha in [1, 2, 3, 5, 7, 10]:
         extended = generate_extended_path(main_path, alpha)
         filename = f"extended_path_alpha_{alpha}.npy"
-        np.save(os.path.join(OUTPUT_DIR, filename), np.array(extended))
+        # np.save(os.path.join(OUTPUT_DIR, filename), np.array(extended))
         print(f"Saved: {filename} with {len(extended)} waypoints.")
 
 if __name__ == "__main__":

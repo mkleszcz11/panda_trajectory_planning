@@ -51,7 +51,7 @@ class FrankaMotionController:
         self.lower_bounds, self.upper_bounds = self.ik_solver.get_joint_limits()
 
         # Load config paths
-        pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner")
+        pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner")
         xacro_path = f"{pkg_root}/panda_description/panda.urdf.xacro"
         urdf_string = subprocess.check_output(["xacro", xacro_path]).decode("utf-8")
         joint_limits_path = f"{pkg_root}/config/joint_limits.yaml"

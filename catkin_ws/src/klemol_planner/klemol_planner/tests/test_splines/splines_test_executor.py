@@ -18,8 +18,8 @@ class SplinesTestExecutor:
         self.collision_checker = collision_checker
         self.logger = logger
         self.logger_sub = rospy.Subscriber(
-            # "/position_joint_trajectory_controller/state",
-            "/effort_joint_trajectory_controller/state",
+            "/position_joint_trajectory_controller/state",
+            # "/effort_joint_trajectory_controller/state",
             JointTrajectoryControllerState,
             self.logger.callback,
         )
@@ -47,7 +47,7 @@ class SplinesTestExecutor:
         self.logger.position_threshold = 0.02  # radians, tune this if needed
 
     def load_extended_path(self, alpha: int) -> np.ndarray:
-        path_file = f"/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/test_splines/extended_paths/extended_path_alpha_{alpha}.npy"
+        path_file = f"/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/test_splines/extended_paths/extended_path_alpha_{alpha}.npy"
         return np.load(path_file, allow_pickle=True)
 
     def run_test(self, mode: str = "raw"):

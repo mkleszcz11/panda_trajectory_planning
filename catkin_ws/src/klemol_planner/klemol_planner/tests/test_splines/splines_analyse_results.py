@@ -6,9 +6,9 @@ from mpl_toolkits.mplot3d import Axes3D
 import typing as t
 from scipy.signal import savgol_filter
 
-# PLOTS_DIR = "/home/marcin/panda_trajectory_planning/plots"
-PLOTS_DIR = "/media/sf_vm_shared"
-RESULTS_FILE = "/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/splines_results/splines_results.npz"
+# PLOTS_DIR = "/home/neurorobotic_student/panda_trajectory_planning/plots"
+PLOTS_DIR = "/home/neurorobotic_student/Anders_Marcin"
+RESULTS_FILE = "/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/splines_results/splines_results.npz"
 ENABLE_SMOOTHING = False # smooth velocity readings
 
 
@@ -429,7 +429,7 @@ def plot_joint_trajectories_all_splines_per_one_parameter(results, robot, plots_
             plt.close()
 
 def load_extended_path(alpha: int) -> np.ndarray:
-    path_file = f"/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/test_splines/extended_paths/extended_path_alpha_{alpha}.npy"
+    path_file = f"/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/test_splines/extended_paths/extended_path_alpha_{alpha}.npy"
     return np.load(path_file, allow_pickle=True)
 
 def main():
@@ -438,7 +438,7 @@ def main():
     os.makedirs(plots_dir, exist_ok=True)
 
     # Load results from file
-    results_dir = (f"/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/splines_results/alpha_{alpha}/splines_results.npz")
+    results_dir = (f"/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/splines_results/alpha_{alpha}/splines_results.npz")
     data = np.load(results_dir, allow_pickle=True)
     results = data["results"]
     robot = Robot()
@@ -458,71 +458,71 @@ def main():
         print(f"  Execution Time:  {execution_time:.3f} s" if execution_time else "  Execution Time:  not recorded")
         print(f"  Trajectory Length: {trajectory_length:.3f} m")
 
-    # Merge data across all planners for joint/EE plots
-    merged_data = {
-        "time": np.concatenate([r["time"] for r in results]),
-        "pos": np.concatenate([r["pos"] for r in results]),
-        "vel": np.concatenate([r["vel"] for r in results]),
-        "ee":  np.concatenate([r["ee"] for r in results]),
-        "mode": np.concatenate([
-            np.array([r["planner"]] * len(r["time"])) for r in results
-        ])
-    }
+    # # Merge data across all planners for joint/EE plots
+    # merged_data = {
+    #     "time": np.concatenate([r["time"] for r in results]),
+    #     "pos": np.concatenate([r["pos"] for r in results]),
+    #     "vel": np.concatenate([r["vel"] for r in results]),
+    #     "ee":  np.concatenate([r["ee"] for r in results]),
+    #     "mode": np.concatenate([
+    #         np.array([r["planner"]] * len(r["time"])) for r in results
+    #     ])
+    # }
 
-    # --- Call plotting functions ---
-    waypoints = [
-        np.array([0.0, -0.786, 0.0, -2.356, 0.0, 1.572, 0.785]),
-        np.array([0.682, 0.025, -0.038, -2.118, -0.002, 2.145, 1.507]),
-        np.array([0.579, 0.303, 0.062, -2.237, -0.038, 2.542, 1.533]),
-        # np.array([0.152, 0.415, 0.549, -2.224, -0.388, 2.549, 1.774]),
-        np.array([-0.456, 0.084, 0.498, -1.988, -0.042, 2.065, 0.858]), #np.array([-0.982, 0.356, 1.240, -2.018, -0.394, 2.105, 1.231]),
-        np.array([-0.542, -0.626, 0.055, -2.502, 0.831, 2.165, 0.816]),
-        np.array([-0.261, -0.068, -0.534, -2.334, -0.117, 2.260, -0.060])
-    ]
-    new_waypoints = load_extended_path(alpha)
+    # # --- Call plotting functions ---
+    # waypoints = [
+    #     np.array([0.0, -0.786, 0.0, -2.356, 0.0, 1.572, 0.785]),
+    #     np.array([0.682, 0.025, -0.038, -2.118, -0.002, 2.145, 1.507]),
+    #     np.array([0.579, 0.303, 0.062, -2.237, -0.038, 2.542, 1.533]),
+    #     # np.array([0.152, 0.415, 0.549, -2.224, -0.388, 2.549, 1.774]),
+    #     np.array([-0.456, 0.084, 0.498, -1.988, -0.042, 2.065, 0.858]), #np.array([-0.982, 0.356, 1.240, -2.018, -0.394, 2.105, 1.231]),
+    #     np.array([-0.542, -0.626, 0.055, -2.502, 0.831, 2.165, 0.816]),
+    #     np.array([-0.261, -0.068, -0.534, -2.334, -0.117, 2.260, -0.060])
+    # ]
+    # new_waypoints = load_extended_path(alpha)
 
-    waypoints_in_3d = [robot.fk(q) for q in waypoints]
-    print("Waypoints in 3D:", waypoints_in_3d)
+    # waypoints_in_3d = [robot.fk(q) for q in waypoints]
+    # print("Waypoints in 3D:", waypoints_in_3d)
 
-    new_waypoints_in_3d = [robot.fk(q) for q in new_waypoints]
-    print("New waypoints in 3D:", new_waypoints_in_3d)
+    # new_waypoints_in_3d = [robot.fk(q) for q in new_waypoints]
+    # print("New waypoints in 3D:", new_waypoints_in_3d)
 
-    plot_only_waypoints(og_waypoints=waypoints_in_3d, new_waypoints=new_waypoints_in_3d, plots_dir=plots_dir)
-    print("Waypoints plot saved.")
+    # plot_only_waypoints(og_waypoints=waypoints_in_3d, new_waypoints=new_waypoints_in_3d, plots_dir=plots_dir)
+    # print("Waypoints plot saved.")
 
-    plot_3d_ee_trajectory(
-        data=merged_data,
-        waypoints_in_3d=waypoints_in_3d,
-        extended_waypoints_in_3d=new_waypoints_in_3d,
-        plots_dir=plots_dir,
-    )
-    print("3D EE trajectory plot saved.")
+    # plot_3d_ee_trajectory(
+    #     data=merged_data,
+    #     waypoints_in_3d=waypoints_in_3d,
+    #     extended_waypoints_in_3d=new_waypoints_in_3d,
+    #     plots_dir=plots_dir,
+    # )
+    # print("3D EE trajectory plot saved.")
 
-    plot_2d_ee_projections(
-        data=merged_data,
-        waypoints_3d=waypoints_in_3d,
-        extended_waypoints_3d=new_waypoints_in_3d,
-        plots_dir=plots_dir,
-    )
-    print("2D EE projections plot saved.")
+    # plot_2d_ee_projections(
+    #     data=merged_data,
+    #     waypoints_3d=waypoints_in_3d,
+    #     extended_waypoints_3d=new_waypoints_in_3d,
+    #     plots_dir=plots_dir,
+    # )
+    # print("2D EE projections plot saved.")
 
-    plot_joint_trajectories_merged(merged_data, robot, plots_dir=plots_dir)
-    print("Merged joint trajectories plots saved.")
+    # plot_joint_trajectories_merged(merged_data, robot, plots_dir=plots_dir)
+    # print("Merged joint trajectories plots saved.")
 
-    plot_joint_trajectories_by_mode(results, robot, plots_dir=plots_dir)
-    print("Joint trajectories plots saved.")
+    # plot_joint_trajectories_by_mode(results, robot, plots_dir=plots_dir)
+    # print("Joint trajectories plots saved.")
 
-    plot_joint_trajectories_all_on_separate_plots(results, robot, plots_dir=plots_dir)
-    print("Joint trajectories on separate plots saved.")
+    # plot_joint_trajectories_all_on_separate_plots(results, robot, plots_dir=plots_dir)
+    # print("Joint trajectories on separate plots saved.")
 
-    plot_all_joint_trajectories_all_splines_per_one_parameter(results, robot, plots_dir=plots_dir)
-    print("Joint trajectories on separate plots v2 saved.")
+    # plot_all_joint_trajectories_all_splines_per_one_parameter(results, robot, plots_dir=plots_dir)
+    # print("Joint trajectories on separate plots v2 saved.")
 
-    plot_joint_trajectories_all_splines_per_one_parameter(results, robot, plots_dir=plots_dir)
-    print("Joint trajectories on separate plots v3 saved.")
+    # plot_joint_trajectories_all_splines_per_one_parameter(results, robot, plots_dir=plots_dir)
+    # print("Joint trajectories on separate plots v3 saved.")
 
-    plot_all_parameters_stacked_by_spline(results, robot, plots_dir=plots_dir)
-    print("All parameters stacked by spline plots saved.")
+    # plot_all_parameters_stacked_by_spline(results, robot, plots_dir=plots_dir)
+    # print("All parameters stacked by spline plots saved.")
 
 if __name__ == "__main__":
     main()
