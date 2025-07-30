@@ -79,7 +79,7 @@ class PlannersTestRunner:
                 rospy.sleep(0.5)
 
         # Save all results to a single file after all tests
-        self.logger.save('/home/neurorobotic_student/results/planner_obstacle_30_loops_test_results.npz')
+        self.logger.save('/home/marcin/results/planner_obstacle_30_loops_test_results.npz')
         rospy.loginfo("All results saved.")
 
     def add_box_obstacle(self, name, size, position, orientation=(0, 0, 0, 1)):
