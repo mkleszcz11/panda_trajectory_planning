@@ -332,6 +332,7 @@ class Robot:
                                      post_processing = None,
                                      post_goal_path: list=None,
                                      pre_start_path: list=None,
+                                     post_processing_method: t.Callable = None,
                                      logger: MainTestLogger= None):
         """
         Move to the goal using a defined planer. If post goal path is specified it will be added to the path
@@ -394,13 +395,23 @@ class Robot:
             rospy.loginfo(f"Fitting spline to the path...")
             # Smooth the path and execute smooth trajectory
             logger.spline_fitting_start_time = logger.stop_timer()
-            trajectory = post_processing.interpolate_quintic_bspline_trajectory(
-                path=path,
-                joint_names=self.group.get_active_joints(),
-                velocity_limits=self.velocity_limits,
-                acceleration_limits=self.acceleration_limits,
-                max_vel_acc_multiplier = 0.3
+            if post_processing_method is not None:
+                trajectory = post_processing_method(
+                    path=path,
+                    joint_names=self.group.get_active_joints(),
+                    velocity_limits=self.velocity_limits,
+                    acceleration_limits=self.acceleration_limits,
+                    max_vel_acc_multiplier = 0.3
                 )
+            else:
+                rospy.logwarn("No post-processing method provided, using default quintic BSpline.")
+            # trajectory = post_processing.interpolate_quintic_bspline_trajectory(
+            #     path=path,
+            #     joint_names=self.group.get_active_joints(),
+            #     velocity_limits=self.velocity_limits,
+            #     acceleration_limits=self.acceleration_limits,
+            #     max_vel_acc_multiplier = 0.3
+            #     )
             # trajectory = post_processing.mock_interpolate(
             #     path=path,
             #     joint_names=self.group.get_active_joints(),

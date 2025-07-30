@@ -1,0 +1,307 @@
+import typing as t
+from geometry_msgs.msg import PoseStamped
+import rospy
+
+
+from klemol_planner.planners.rrt import RRTPlanner
+from klemol_planner.planners.rrt_star import RRTStarPlanner
+from klemol_planner.planners.rrt_with_connecting import RRTWithConnectingPlanner
+from klemol_planner.planners.prm import PRMPlanner
+
+from klemol_planner.environment.robot_model import Robot
+from klemol_planner.environment.collision_checker import CollisionChecker
+from klemol_planner.camera_utils.camera_operations import CameraOperations
+from klemol_planner.environment.environment_transformations import PandaTransformations
+from klemol_planner.goals.point_with_orientation import PointWithOrientation
+from klemol_planner.post_processing.path_post_processing import PathPostProcessing
+
+from klemol_planner.utils.config_loader import load_planner_params
+
+class StaticDemo:
+    def __init__(self, planner_name: str, post_processing_method: str, objects_names: t.List[str], include_obstacle: bool = False):
+        """
+        Demo initialization.
+        
+        Args:
+            planner_name (str): Name of the planner to use for the demo.
+            post_processing_method (str): Name of the post processing method to use.
+            objects_names (t.List[str]): List of object names to be used in the demo.
+
+        """
+        # List of objects that should be cleaned
+        self.objects_to_clean = objects_names
+        
+        # List of all possible objects the system can clean - names as defined
+        # in yolo, must be associated with an aruco code (one in the box)
+        # Note: return values from camera operations are corner_XY, where XY is the aruco code number (1, 2, 14, 200, ...)
+        self.object_name_to_aruco = {
+            "banana": "corner_10",
+            "sports_ball": "corner_11",
+        }
+        
+        # Validate if object names are a subset of available names in object_name_to_aruco
+        if not set(objects_names).issubset(set(self.object_name_to_aruco.keys())):
+            raise ValueError("Some object names are not defined in the object_name_to_aruco dictionary.")
+
+        # Mandatory classes to run the demo
+        self.robot_model = Robot()
+        self.collision_checker = CollisionChecker(self.robot_model, group_name="panda_arm")
+        self.post_processing = PathPostProcessing(collision_checker=self.collision_checker)
+
+        # All possible planners available for the demo
+        self.available_planners = {
+            "rrt": RRTPlanner,
+            "rrt_star": RRTStarPlanner,
+            "rrt_with_connecting": RRTWithConnectingPlanner,
+            "prm": PRMPlanner
+        }
+
+        # All possible post processing methods available for the demo
+        self.available_post_processing_methods = {
+            "qubic_spline": self.post_processing.generate_cubic_trajectory,
+            "quintic_polynomial": self.post_processing.generate_quintic_polynomial_trajectory,
+            "quintic_bspline": self.post_processing.generate_quintic_bspline_trajectory,
+        }
+        self.post_processing_method = self.available_post_processing_methods.get(post_processing_method, None)
+
+        # Initialize the selected planner
+        if planner_name not in self.available_planners:
+            raise ValueError(f"Planner {planner_name} is not available. Choose from {list(self.available_planners.keys())}.")
+        algorithm_params = load_planner_params(planner_name)
+        self.demo_planner = self.available_planners[planner_name](self.robot_model, self.collision_checker, algorithm_params)
+
+        # Move to the initial position
+        self.robot_model.move_to_joint_config(self.start_joint_config)
+
+        # Camera operations and transformations
+        self.camera_operations = CameraOperations()
+        self.panda_transformations = PandaTransformations(cam_operations=self.camera_operations)
+        self.panda_transformations.calibrate_camera()
+
+        # Dictionary of object dropping points, defined as {"object_name": PointWithOrientation}
+        self.drop_points = dict()
+        self.drop_points = self.localise_dropping_locations(objects_names, vertical_offset=0.0)
+
+        # List of tuples, where each tuple is defined as (object_name, PointWithOrientation)
+        # this is not a dictionary, as we might have multiple objects with the same name
+        self.pick_points = list()
+        self.pick_points = self.localise_picking_locations(objects_names, vertical_offset=0.0)
+
+        # Add an obstacle if specified
+        if include_obstacle:
+            self.add_box_obstacle(
+                name="obstacle",
+                size=(0.2, 0.2, 0.2),
+                position=(0.5, 0.0, 0.1),
+                orientation=(0, 0, 0, 1),
+                collision_margin=0.05
+            )
+
+    def localise_dropping_locations(self, objects_names: t.List[str], vertical_offset: float = 0.0) -> t.Dict[str, PointWithOrientation]:
+        """
+        Localise the dropping locations for the given objects.
+        Should be called once at the beginning, as later objects may overlap with the code in the box.
+        
+        Return:
+            A dictionary of object dropping points, defined as {"object_name": PointWithOrientation}
+        """
+        return_dict = dict()
+        marker_transforms = self.camera_operations.get_marker_transforms()
+
+        # Get an object, find assosiated aruco code, and transform it to the base frame
+        for object_name in objects_names:
+            if object_name not in self.object_name_to_aruco:
+                raise ValueError(f"Object name {object_name} not found in object_name_to_aruco mapping.")
+
+            aruco_code = self.object_name_to_aruco[object_name]
+            if aruco_code not in marker_transforms:
+                raise ValueError(f"Aruco code {aruco_code} for object {object_name} not found in marker transforms.")
+
+            # Get the transform for the aruco code
+            x, y, z = marker_transforms[aruco_code][:3, 3]
+            # Create a PointWithOrientation for the dropping point
+            dropping_point_in_camera_frame = PointWithOrientation(
+                x=x,
+                y=y,
+                z=z,  # Add vertical offset if neededobject_to
+                roll=0.0,
+                pitch=0.0,
+                yaw=0.0  # Assuming no specific orientation for dropping
+            )
+            dropping_point_in_robot_frame = self.panda_transformations.transform_point(dropping_point_in_camera_frame, 'camera', 'base')
+            rospy.loginfo(f"Object {object_name} dropping point in robot frame: {dropping_point_in_robot_frame}")
+
+            return_dict[object_name] = dropping_point_in_robot_frame
+
+        rospy.loginfo(f"Localised dropping points: {return_dict}")
+        return return_dict
+
+    def localise_picking_locations(self, objects_names: t.List[str], vertical_offset: float = 0.0) -> t.Dict[str, PointWithOrientation]:
+        """
+        Localise the picking locations for the given objects. This is to be solved with a camera.
+        
+        Return:
+            A List of tuples, where each tuple is defined as (object_name, PointWithOrientation)
+        """
+        list_of_picking_points = self.camera_operations.get_list_of_picking_points(objects_names, vertical_offset=vertical_offset, points_to_not_focus_on=self.drop_points.keys())
+        return list_of_picking_points
+
+    def find_picking_point(self, object_name: str, vertical_offset: float = 0.0) -> PointWithOrientation:
+        """
+        Return only one picking point for the specified object.
+        Based on the list of picking points, choose one and return it.
+        """
+        for name, point in self.pick_points:
+            if name == object_name:
+                return PointWithOrientation(
+                    x=point.x,
+                    y=point.y,
+                    z=point.z + vertical_offset,  # Add vertical offset if needed
+                    roll=point.roll,
+                    pitch=point.pitch,
+                    yaw=point.yaw
+                )
+        raise ValueError(f"Object {object_name} not found in picking points.")
+
+    def pick_and_drop(self, object_name: str, approach_vertical_offset: float = 0.0):
+        """
+        Pick and drop the specified object.
+        
+        1. Open gripper.
+        2. Find the picking point for the object.
+        3. Move to the picking point - if approaching from above, add post_goal_path
+        4. Close the gripper to pick the object.
+        5. Move to the dropping point.
+        6. Open the gripper to drop the object.
+
+        Args:
+            object_name (str): Name of the object to pick and drop.
+            approach_vertical_offset (float): Vertical offset to approach the object from above.
+        """
+        if object_name not in self.objects_to_clean:
+            raise ValueError(f"Object {object_name} is not in the list of objects to clean.")
+
+        # Open gripper
+        self.robot_model.open_gripper()
+
+        # Find the picking point for the object
+        picking_point = self.find_picking_point(object_name, vertical_offset=approach_vertical_offset)
+        rospy.loginfo(f"Picking point for {object_name}: {picking_point}")
+
+        # Move to the picking point
+        if approach_vertical_offset > 0:
+            post_goal_path = [picking_point]
+        else:
+            post_goal_path = None
+        
+        self.robot_model.move_with_trajectory_planner(
+            planner=self.demo_planner,
+            post_processing=self.post_processing,
+            goal=picking_point,
+            post_goal_path=post_goal_path,
+            post_processing_method=self.post_processing_method
+        )
+
+        # Close the gripper to pick the object
+        self.robot_model.close_gripper()
+        rospy.loginfo(f"Picked {object_name} at {picking_point}")
+        
+        # Move to the dropping point
+        dropping_point = self.drop_points.get(object_name)
+        if not dropping_point:
+            raise ValueError(f"Dropping point for {object_name} not found.")
+
+        vertical_point_before_drop = PointWithOrientation(
+            x=dropping_point.x,
+            y=dropping_point.y,
+            z=dropping_point.z + approach_vertical_offset,  # Approach from above
+            roll=dropping_point.roll,
+            pitch=dropping_point.pitch,
+            yaw=dropping_point.yaw
+        )
+        pre_start_path = [dropping_point, vertical_point_before_drop]
+
+        self.robot_model.move_with_trajectory_planner(
+            planner=self.demo_planner,
+            post_processing=self.post_processing,
+            goal=dropping_point,
+            pre_start_path=pre_start_path,
+            post_processing_method=self.post_processing_method
+        )
+
+        # Open the gripper to drop the object
+        self.robot_model.open_gripper()
+        rospy.loginfo(f"Dropped {object_name} at {dropping_point}")
+
+    def run(self):
+        """
+        1. Look for objects to clean and generate picking points.
+        2. Run find picking point.
+        3. Pick and drop that point.
+        Repeat till localise_picking_location returns an empty list num_of_tries_to_find times in the row.
+        """
+        num_of_tries_to_find = 3
+
+        rospy.loginfo("Starting the static demo for picking and dropping objects.")
+        
+        for idx in range(num_of_tries_to_find):
+            rospy.loginfo(f"Attempt {idx + 1} to find picking points.")
+            if not self.pick_points:
+                rospy.logwarn("No picking points found. Retrying...")
+                self.pick_points = self.localise_picking_locations(self.objects_to_clean)
+                if not self.pick_points:
+                    rospy.logwarn("No picking points found after retrying. Exiting.")
+                    return
+            else:
+                rospy.loginfo(f"Found picking points: {self.pick_points}")
+                for object_name, _ in self.pick_points:
+                    rospy.loginfo(f"Picking and dropping object: {object_name}")
+                    self.pick_and_drop(object_name, approach_vertical_offset=0.1)
+
+        rospy.loginfo("Static demo finished.")
+
+    def add_box_obstacle(self, name, size, position, orientation=(0, 0, 0, 1), collision_margin=0.0):
+        """
+        Add a box obstacle to the planning scene with an optional collision margin.
+
+        Args:
+            name (str): Name of the obstacle.
+            size (tuple): (x, y, z) dimensions of the actual box (meters).
+            position (tuple): (x, y, z) center of the box (meters).
+            orientation (tuple): Quaternion (x, y, z, w) orientation.
+            collision_margin (float): Amount to inflate each dimension symmetrically (meters).
+        """
+        # Inflate size symmetrically
+        inflated_size = tuple(s + 2 * collision_margin for s in size)
+
+        box_pose = PoseStamped()
+        box_pose.header.frame_id = self.robot_model.base_link
+        box_pose.pose.position.x = position[0]
+        box_pose.pose.position.y = position[1]
+        box_pose.pose.position.z = position[2]
+        box_pose.pose.orientation.x = orientation[0]
+        box_pose.pose.orientation.y = orientation[1]
+        box_pose.pose.orientation.z = orientation[2]
+        box_pose.pose.orientation.w = orientation[3]
+
+        self.scene.add_box(name, box_pose, size=inflated_size)
+        rospy.sleep(1.0)
+        rospy.loginfo(f"Added box '{name}' at {position} with inflated size {inflated_size} (original: {size}, margin: {collision_margin})")
+
+
+def main():
+    rospy.init_node("static_demo_node", anonymous=True)
+    
+    # Example usage
+    planner_name = "rrt_with_connecting"  # Choose from available planners
+    post_processing_method = "quintic_polynomial"  # Choose from available post processing methods
+    objects_to_clean = ["sports_ball"]  # Define the objects to clean
+
+    demo = StaticDemo(planner_name, post_processing_method, objects_to_clean, include_obstacle=False)
+    demo.run()
+    
+if __name__ == "__main__":
+    try:
+        main()
+    except rospy.ROSInterruptException:
+        pass

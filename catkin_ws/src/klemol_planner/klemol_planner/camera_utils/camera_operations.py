@@ -19,7 +19,7 @@ import math
 import torch
 from klemol_planner.camera_utils.capture_realsense_frame_yolo import setup_realsense_pipeline, get_aligned_frames, save_frame
 from klemol_planner.camera_utils.antipodal_grasp_planner2 import AntipodalGraspPlanner
-
+from klemol_planner.goals.point_with_orientation import PointWithOrientation
 
 # --- Static method for getting depth ---
 def convert_depth_to_phys_coord_using_realsense_intrinsics(x, y, depth, intrinsics_obj):
@@ -40,7 +40,7 @@ class CameraOperations:
         Initialize the RealSense D435i camera and align depth to color stream.
         If no camera is present (USE_REALSENSE = False), fallback to hardcoded intrinsics.
         """
-        self.USE_REALSENSE = False  # Toggle to False if no camera is connected
+        self.USE_REALSENSE = True  # Toggle to False if no camera is connected
 
         if self.USE_REALSENSE:
             self.pipeline = rs.pipeline()
@@ -155,7 +155,7 @@ class CameraOperations:
 
         Args:
             target_label (str): Object label (e.g., "banana").
-            yolo_model: Pre-loaded YOLOv8 segmentation model.
+            yolo_model: Pre-loaded YOLOv8 segmentation moalented Robotics Intern to join our Zurich-based team for a 6-month internship (early sdel.
             confidence_thresh (float): Min confidence for YOLO.
             visualize (bool): If True, displays intermediate steps.
 
@@ -676,10 +676,37 @@ class CameraOperations:
         except Exception:
             return 0.0, 0.0, 0.0
 
-    def find_grasp(self, object_to_find: str = "sports ball", timeout: float = 10.0) -> t.List:
+
+    def get_list_of_picking_points(self, objects_names: t.List[str] = None, timeout: float = 10.0, points_to_not_focus_on: t.List[PointWithOrientation] = None) -> t.List[t.Tuple[str, PointWithOrientation]]:
+        """
+        #TODO - THIS FUNCITON SHOULD BE CHANGED, IT DOES NOT ACCOUNT FOR MULTIPLE INSTANCE OF THE SAME OBJECT
+        Get a list of picking points for the specified objects.
+
+        Args:
+            objects_names (t.List[str], optional): List of object names to find picking points for.
+            timeout (float, optional): Timeout for the operation.
+            points_to_not_focus_on (t.List[PointWithOrientation], optional): List of points to ignore when finding picking points.
+
+        Returns:
+            t.List[t.Tuple[str, PointWithOrientation]]: List of tuples containing object name and picking point.
+        """
+        if objects_names is None:
+            objects_names = self.object_name_to_aruco.keys()
+
+        picking_points = []
+        for object_name in objects_names:
+            point = self.find_grasp(object_name, timeout=timeout, points_to_not_focus_on=points_to_not_focus_on)
+            if point:
+                picking_points.append((object_name, point))
+
+        return picking_points
+
+
+    def find_grasp(self, object_to_find: str = "sports ball", timeout: float = 10.0, points_to_not_focus_on: t.List[PointWithOrientation] = None) -> t.List:
         """
         TODO
         Return success, x, y, z, rotation
+        Put a black circles on the points where we should not focus on
         """
         pipeline = self.pipeline
         profile = self.pipeline.get_active_profile()
@@ -729,7 +756,7 @@ class CameraOperations:
             width_favor_narrow_weight=GRASP_WIDTH_FAVOR_NARROW_WEIGHT
         )
         print("Antipodal Grasp Planner initialized.")
-        TARGET_CLASS_NAME = "sports ball"  # Change to your target: "cell phone", "cup", etc.
+        TARGET_CLASS_NAME = object_to_find  # Change to your target: "cell phone", "cup", etc.
 
         confidence_threshold = 0.5
         output_folder = f"live_{TARGET_CLASS_NAME.replace(' ', '_')}_grasps_tracked"
@@ -762,6 +789,17 @@ class CameraOperations:
 
             # --- Perform Object Detection, Segmentation & TRACKING ---
             # Using model.track() for object tracking
+            # Put a black circles on the points where we should not focus on
+            if points_to_not_focus_on:
+                for point in points_to_not_focus_on:
+                    cv2.circle(draw_image, (int(point.x), int(point.y)), 10, (0, 0, 0), -1)
+                    cv2.putText(draw_image, "Ignore", (int(point.x) + 15, int(point.y) + 5),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
+            # Show the image with ignore points
+            cv2.imshow("Ignore Points", cv2.resize(draw_image, (self.color_width // 2, self.color_height // 2)))
+            cv2.waitKey(0)
+            
             results = model.track(color_image_bgr, persist=True, tracker="botsort.yaml", verbose=False)
             # For ByteTrack: tracker="bytetrack.yaml"
             # `persist=True` tells YOLO to remember tracks between frames.
@@ -796,7 +834,7 @@ class CameraOperations:
                     label_text = f"ID:{track_id} {class_name} {confs[i]:.2f}" if track_id != -1 else f"{class_name} {confs[i]:.2f}"
                     cv2.rectangle(draw_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
                     cv2.putText(draw_image, label_text, (x1, y1 - 10 if y1 > 20 else y1 + 20),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                                RETURNINGcv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
                     individual_mask_raw = masks_data_raw[i]
                     if individual_mask_raw.shape != current_img_shape:

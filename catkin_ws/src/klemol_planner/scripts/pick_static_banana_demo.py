@@ -73,7 +73,6 @@ class FrankaMotionController:
         panda_transformations = PandaTransformations(cam_operations=camera_operations)
         panda_transformations.calibrate_camera()
 
-
         #####################################
         # WE WILL BE MOVING TO THESE POINTS #
         #####################################
