@@ -80,13 +80,13 @@ class Robot:
         if urdf_string is not None:
             self.urdf_string = urdf_string
         else:
-            pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner")
+            pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner")
             xacro_path = f"{pkg_root}/panda_description/panda.urdf.xacro"
             self.urdf_string = subprocess.check_output(["xacro", xacro_path]).decode("utf-8")
 
         # Load joint limits
         if joint_limits_path is None:
-            pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner")
+            pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner")
             xacro_path = f"{pkg_root}/panda_description/panda.urdf.xacro"
             joint_limits_path = f"{pkg_root}/config/joint_limits.yaml"
 
@@ -161,6 +161,33 @@ class Robot:
             z = np.random.uniform(*z_range)
             roll = np.random.uniform(-np.pi, np.pi)
             pitch = np.random.uniform(-np.pi/2, np.pi/2)
+            yaw = np.random.uniform(-np.pi, np.pi)
+
+            # Get ik solution for random sampled pose
+            pose = PointWithOrientation(x=x, y=y, z=z, roll=roll, pitch=pitch, yaw=yaw)
+            config = self.ik(pose)
+
+            if config is not None and self.is_within_limits(config):
+                return config
+
+    def sample_random_configuration_in_task_space_with_limited_tool_orientation(self, obstacle = None) -> np.ndarray:
+        """
+        Sample a random joint configuration that is within the task space defined by the end-effector pose,
+        with limited tool orientation.
+
+        Returns:
+            Random joint configuration (7D np.ndarray)
+        """
+        x_range = (0.1, 0.7)
+        y_range = (-0.4, 0.4)
+        z_range = (0.17, 0.5)
+        
+        while True:
+            x = np.random.uniform(*x_range)
+            y = np.random.uniform(*y_range)
+            z = np.random.uniform(*z_range)
+            roll = np.random.uniform(-np.pi-0.01, -np.pi+0.01)
+            pitch = np.random.uniform(-0.01, 0.01)
             yaw = np.random.uniform(-np.pi, np.pi)
 
             # Get ik solution for random sampled pose
@@ -357,7 +384,7 @@ class Robot:
                     seed=seed
                 )
                 path.append(pose_to_append)
-
+ 
         logger.planning_time = logger.stop_timer()
         logger.number_of_waypoints_before_post_processing = len(path)
 
@@ -367,7 +394,7 @@ class Robot:
             rospy.loginfo(f"Fitting spline to the path...")
             # Smooth the path and execute smooth trajectory
             logger.spline_fitting_start_time = logger.stop_timer()
-            trajectory = post_processing.interpolate_quintic_trajectory(
+            trajectory = post_processing.interpolate_quintic_bspline_trajectory(
                 path=path,
                 joint_names=self.group.get_active_joints(),
                 velocity_limits=self.velocity_limits,
@@ -393,8 +420,8 @@ class Robot:
         Args:
             trajectory: A JointTrajectory message.
         """
-        # client = actionlib.SimpleActionClient('/position_joint_trajectory_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
-        client = actionlib.SimpleActionClient('/effort_joint_trajectory_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
+        client = actionlib.SimpleActionClient('/position_joint_trajectory_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
+        # client = actionlib.SimpleActionClient('/effort_joint_trajectory_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
 
         client.wait_for_server()
         goal = FollowJointTrajectoryGoal()
