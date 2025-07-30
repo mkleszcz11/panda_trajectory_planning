@@ -44,7 +44,7 @@ if __name__ == "__main__":
     rospy.sleep(2)
     executor.run_test(mode="spline_quintic_polynomial")
 
-    file_path = f"/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/splines_results/alpha_{ALPHA}/splines_results.npz"
+    file_path = f"/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/splines_results/alpha_{ALPHA}/splines_results.npz"
     dir_path = os.path.dirname(file_path)
     os.makedirs(dir_path, exist_ok=True)
 

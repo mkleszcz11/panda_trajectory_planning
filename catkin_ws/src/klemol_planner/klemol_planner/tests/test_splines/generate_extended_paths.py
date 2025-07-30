@@ -2,7 +2,7 @@ import numpy as np
 import os
 import typing as t
 
-OUTPUT_DIR = "/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/test_splines/extended_paths"  # make sure this exists or will be created
+OUTPUT_DIR = "/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/test_splines/extended_paths"  # make sure this exists or will be created
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def generate_extended_path(
