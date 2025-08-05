@@ -198,7 +198,7 @@ class PathPostProcessing:
 
             if delta_q.max() < 1e-6:
                 # If the joint positions are very close, skip this waypoint
-                times.append(0.1)
+                times.append(times[-1] + 0.1)
                 rospy.logwarn(f"Skipping waypoint {i} due to negligible joint movement.")
                 continue
 
@@ -208,7 +208,7 @@ class PathPostProcessing:
             times.append(times[-1] + max(t_required, 0.1))
 
         times = np.array(times)
-        # print(f"======== TIMES TIMES TIMES ========\n{times}\n======== TIMES TIMES TIMES ========")
+        print(f"======== TIMES TIMES TIMES ========\n{times}\n======== TIMES TIMES TIMES ========")
 
         splines = []
         for j in range(n_joints):
@@ -343,7 +343,7 @@ class PathPostProcessing:
             point.time_from_start = rospy.Duration.from_sec(t_val)
             traj_msg.points.append(point)
 
-        traj_msg.header.stamp = rospy.Time.now() + rospy.Duration(0.5)
+        traj_msg.header.stamp = rospy.Time.now() #+ rospy.Duration(0.3)
 
         # print("Trajectory starts at:", traj_msg.header.stamp.to_sec())
         # print("First point time_from_start:", traj_msg.points[0].time_from_start.to_sec())

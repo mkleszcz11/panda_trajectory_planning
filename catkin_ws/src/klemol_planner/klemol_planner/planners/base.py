@@ -84,7 +84,7 @@ class Planner:
             tip_link=self.robot_model.ee_link,
             urdf_string=self.robot_model.urdf_string,
             timeout=0.1,
-            solve_type="Speed",
+            solve_type="Manipulation1",
         )
         while len(goal_configs) < self.max_goal_samples and seed_attempts < max_attempts:
             random_seed = np.random.uniform(self.robot_model.lower_bounds, self.robot_model.upper_bounds)

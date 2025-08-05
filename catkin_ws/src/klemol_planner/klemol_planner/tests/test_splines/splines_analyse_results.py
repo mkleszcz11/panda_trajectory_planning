@@ -6,9 +6,9 @@ from mpl_toolkits.mplot3d import Axes3D
 import typing as t
 from scipy.signal import savgol_filter
 
-# PLOTS_DIR = "/home/marcin/panda_trajectory_planning/plots"
-PLOTS_DIR = "/home/marcin/Anders_Marcin"
-RESULTS_FILE = "/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/splines_results/splines_results.npz"
+# PLOTS_DIR = "/home/neurorobotic_student/panda_trajectory_planning/plots"
+PLOTS_DIR = "/home/neurorobotic_student/Anders_Marcin"
+RESULTS_FILE = "/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/splines_results/splines_results.npz"
 ENABLE_SMOOTHING = False # smooth velocity readings
 
 
@@ -429,7 +429,7 @@ def plot_joint_trajectories_all_splines_per_one_parameter(results, robot, plots_
             plt.close()
 
 def load_extended_path(alpha: int) -> np.ndarray:
-    path_file = f"/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/test_splines/extended_paths/extended_path_alpha_{alpha}.npy"
+    path_file = f"/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/test_splines/extended_paths/extended_path_alpha_{alpha}.npy"
     return np.load(path_file, allow_pickle=True)
 
 def main():
@@ -438,7 +438,7 @@ def main():
     os.makedirs(plots_dir, exist_ok=True)
 
     # Load results from file
-    results_dir = (f"/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/splines_results/alpha_{alpha}/splines_results.npz")
+    results_dir = (f"/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner/klemol_planner/tests/splines_results/alpha_{alpha}/splines_results.npz")
     data = np.load(results_dir, allow_pickle=True)
     results = data["results"]
     # robot = Robot()

@@ -80,13 +80,13 @@ class Robot:
         if urdf_string is not None:
             self.urdf_string = urdf_string
         else:
-            pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner")
+            pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner")
             xacro_path = f"{pkg_root}/panda_description/panda.urdf.xacro"
             self.urdf_string = subprocess.check_output(["xacro", xacro_path]).decode("utf-8")
 
         # Load joint limits
         if joint_limits_path is None:
-            pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/marcin/panda_trajectory_planning/catkin_ws/src/klemol_planner")
+            pkg_root = rospy.get_param("/klemol_planner/package_path", default="/home/neurorobotic_student/panda_trajectory_planning/catkin_ws/src/klemol_planner")
             xacro_path = f"{pkg_root}/panda_description/panda.urdf.xacro"
             joint_limits_path = f"{pkg_root}/config/joint_limits.yaml"
 
@@ -370,10 +370,11 @@ class Robot:
         planner.set_start(path[-1])
         planner.set_goal(goal)
         planned_path, success = planner.plan()
-        if not success:
+        if not success and logger is not None:
             logger.planning_successful = False
 
-        path += planned_path
+        # path += planned_path
+        path += planned_path[1:]
 
         ### ADDING INTERMEDIATE NODES UP TO THE OBJECT ###
         if post_goal_path:
@@ -386,15 +387,17 @@ class Robot:
                 )
                 path.append(pose_to_append)
  
-        logger.planning_time = logger.stop_timer()
-        logger.number_of_waypoints_before_post_processing = len(path)
+        if logger is not None:
+            logger.planning_time = logger.stop_timer()
+            logger.number_of_waypoints_before_post_processing = len(path)
 
         #### Call shortcutting function (edit path)
         if success:
             rospy.loginfo(f"Planner found path with {len(path)} waypoints.")
             rospy.loginfo(f"Fitting spline to the path...")
             # Smooth the path and execute smooth trajectory
-            logger.spline_fitting_start_time = logger.stop_timer()
+            if logger is not None:
+                logger.spline_fitting_start_time = logger.stop_timer()
             if post_processing_method is not None:
                 trajectory = post_processing_method(
                     path=path,
@@ -419,7 +422,8 @@ class Robot:
             #     acceleration_limits=self.acceleration_limits,
             #     segment_time = 2.0
             #     )
-            logger.spline_fitting_time = logger.stop_timer()
+            if logger is not None:
+                logger.spline_fitting_time = logger.stop_timer()
             self.send_trajectory_to_controller(trajectory)
         else:
             rospy.logwarn("Planner failed to find a path.")
