@@ -303,7 +303,7 @@ class Robot:
 
             goal = MoveGoal()
             goal.width = 0.08     # fully open (max 0.08 m)
-            goal.speed = 0.1
+            goal.speed = 1.5
             client.send_goal(goal)
             client.wait_for_result()
 
@@ -313,8 +313,8 @@ class Robot:
 
             goal = GraspGoal()
             goal.width = 0.065     # fully closed
-            goal.speed = 0.1
-            goal.force = 50.0     # closing force (adjust based on object)
+            goal.speed = 1.5
+            goal.force = 5.0     # closing force (adjust based on object)
             goal.epsilon.inner = 0.08
             goal.epsilon.outer = 0.08
             client.send_goal(goal)
@@ -404,7 +404,7 @@ class Robot:
                     joint_names=self.group.get_active_joints(),
                     velocity_limits=self.velocity_limits,
                     acceleration_limits=self.acceleration_limits,
-                    max_vel_acc_multiplier = 0.3
+                    max_vel_acc_multiplier = 0.3,
                 )
             else:
                 rospy.logwarn("No post-processing method provided, using default quintic BSpline.")
@@ -427,6 +427,112 @@ class Robot:
             self.send_trajectory_to_controller(trajectory)
         else:
             rospy.logwarn("Planner failed to find a path.")
+
+
+    def move_with_trajectory_planner_predefined_time(self,
+                                                     planner,
+                                                     goal: PointWithOrientation,
+                                                     post_processing = None,
+                                                     post_goal_path: list=None,
+                                                     pre_start_path: list=None,
+                                                     post_processing_method: t.Callable = None,
+                                                     logger: MainTestLogger= None,
+                                                     duration: float = None):
+        """
+        Move to the goal using a defined planer. If post goal path is specified it will be added to the path
+        that leads to the goal.
+
+        Params:
+            planner: planner object instance
+            goal: Goal pose
+            post_goal_path: List of waypoints to append after reaching a goal
+        """
+        path = []
+        current_config = np.array(self.group.get_current_joint_values())
+
+        path.append(current_config)
+
+        ik_solver = IK(
+            base_link=self.base_link,
+            tip_link=self.ee_link,
+            urdf_string=self.urdf_string,
+            timeout=0.05,
+            solve_type="Distance",
+        )
+
+        ### PRE START PATH ###
+        if pre_start_path:
+            for waypoint in pre_start_path:
+                seed = path[-1]
+                pose_to_append = self.ik_with_custom_solver(
+                    pose = waypoint,
+                    solver=ik_solver,
+                    seed=seed
+                )
+                path.append(pose_to_append)
+
+        planner.set_start(path[-1])
+        planner.set_goal(goal)
+        planned_path, success = planner.plan()
+        if not success and logger is not None:
+            logger.planning_successful = False
+
+        # path += planned_path
+        path += planned_path[1:]
+
+        ### ADDING INTERMEDIATE NODES UP TO THE OBJECT ###
+        if post_goal_path:
+            for waypoint in post_goal_path:
+                seed = path[-1]
+                pose_to_append = self.ik_with_custom_solver(
+                    pose = waypoint,
+                    solver=ik_solver,
+                    seed=seed
+                )
+                path.append(pose_to_append)
+ 
+        if logger is not None:
+            logger.planning_time = logger.stop_timer()
+            logger.number_of_waypoints_before_post_processing = len(path)
+
+        #### Call shortcutting function (edit path)
+        if success:
+            rospy.loginfo(f"Planner found path with {len(path)} waypoints.")
+            rospy.loginfo(f"Fitting spline to the path...")
+            # Smooth the path and execute smooth trajectory
+            if logger is not None:
+                logger.spline_fitting_start_time = logger.stop_timer()
+            if post_processing_method is not None:
+                trajectory = post_processing_method(
+                    path=path,
+                    joint_names=self.group.get_active_joints(),
+                    velocity_limits=self.velocity_limits,
+                    acceleration_limits=self.acceleration_limits,
+                    max_vel_acc_multiplier = 0.3,
+                    duration = 5.0
+                )
+            else:
+                rospy.logwarn("No post-processing method provided, using default quintic BSpline.")
+            # trajectory = post_processing.interpolate_quintic_bspline_trajectory(
+            #     path=path,
+            #     joint_names=self.group.get_active_joints(),
+            #     velocity_limits=self.velocity_limits,
+            #     acceleration_limits=self.acceleration_limits,
+            #     max_vel_acc_multiplier = 0.3
+            #     )
+            # trajectory = post_processing.mock_interpolate(
+            #     path=path,
+            #     joint_names=self.group.get_active_joints(),
+            #     velocity_limits=self.velocity_limits,
+            #     acceleration_limits=self.acceleration_limits,
+            #     segment_time = 2.0
+            #     )
+            if logger is not None:
+                logger.spline_fitting_time = logger.stop_timer()
+            self.send_trajectory_to_controller(trajectory)
+        else:
+            rospy.logwarn("Planner failed to find a path.")
+
 
     def send_trajectory_to_controller(self, trajectory: JointTrajectory):
         """

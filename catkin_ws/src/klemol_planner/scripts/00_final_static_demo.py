@@ -330,11 +330,11 @@ def main():
 
     # Example usage
     planner_name = "rrt_with_connecting"  # Choose from available planners
-    post_processing_method = "quintic_polynomial"  # Choose from available post processing methods
+    post_processing_method = "quintic_bspline"  # Choose from available post processing methods
     objects_to_clean = ["fork", "scissors"]#, "banana"]  # Define the objects to clean
     # objects_to_clean = ["banana"]
 
-    demo = StaticDemo(planner_name, post_processing_method, objects_to_clean, include_obstacle=True)
+    demo = StaticDemo(planner_name, post_processing_method, objects_to_clean, include_obstacle=False)
     demo.run()
 
 if __name__ == "__main__":

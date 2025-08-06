@@ -63,14 +63,15 @@ class PathPostProcessing:
         return traj_msg
 
     def generate_quintic_bspline_trajectory(
-        self,
-        path: t.List[np.ndarray],
-        joint_names: t.List[str],
-        velocity_limits: np.ndarray,
-        acceleration_limits: np.ndarray,
-        dt: float = 0.005,
-        max_vel_acc_multiplier: float = 0.1
-    ) -> JointTrajectory:
+            self,
+            path: t.List[np.ndarray],
+            joint_names: t.List[str],
+            velocity_limits: np.ndarray,
+            acceleration_limits: np.ndarray,
+            dt: float = 0.005,
+            max_vel_acc_multiplier: float = 0.1,
+            duration: float = None
+        ) -> JointTrajectory:
         """
         Approximates joint-space trajectory using a quintic B-spline (order 5, degree 5).
         This is NOT interpolating; the path is approximated using control points.
@@ -82,6 +83,7 @@ class PathPostProcessing:
             acceleration_limits: Max joint accelerations.
             dt: Sampling interval.
             max_vel_acc_multiplier: Multiplier to reduce speed/acceleration.
+            duration: Optional. Force the trajectory to last exactly this long [s].
 
         Returns:
             JointTrajectory message.
@@ -92,56 +94,51 @@ class PathPostProcessing:
             rospy.sleep(0.05)
 
         q_current = joint_reader.get_current_positions()
-        q = np.array([q_current]*3 + list(path) + [path[-1]]*2) 
-        # q = np.array([q_current] + list(path))  # shape: (n_points, n_joints)
+        q = np.array([q_current]*3 + list(path) + [path[-1]]*2)
 
         n_ctrl_points = q.shape[0]
         n_joints = q.shape[1]
-        degree = 5 # THIS MAKES IT QUINTIC
+        degree = 5
         k = degree
 
         if n_ctrl_points <= k:
             raise ValueError(f"Need at least {k+1} control points for quintic B-spline (got {n_ctrl_points})")
 
-        # --- Knot vector (open uniform clamped) ---
-        # Add degree multiplicity at start and end to clamp the curve
+        # --- Knot vector ---
         knots = np.concatenate((
             np.zeros(k),
             np.linspace(0, 1, n_ctrl_points - k + 1),
             np.ones(k)
         ))
 
-        splines = []
-        for j in range(n_joints):
-            ctrl = q[:, j]
-            spline = BSpline(knots, ctrl, k)
-            splines.append(spline)
+        splines = [BSpline(knots, q[:, j], k) for j in range(n_joints)]
 
         # --- Time allocation ---
-        total_time = 0.0
-        v_max = velocity_limits * max_vel_acc_multiplier
-        a_max = acceleration_limits * max_vel_acc_multiplier
-
-        for i in range(1, len(q)):
-            delta_q = np.abs(q[i] - q[i - 1])
-            t_required = self._calculate_min_time_linear_movement(delta_q, v_max, a_max)
-            total_time += max(t_required, 0.1)
+        if duration is not None:
+            total_time = duration
+        else:
+            total_time = 0.0
+            v_max = velocity_limits * max_vel_acc_multiplier
+            a_max = acceleration_limits * max_vel_acc_multiplier
+            for i in range(1, len(q)):
+                delta_q = np.abs(q[i] - q[i - 1])
+                t_required = self._calculate_min_time_linear_movement(delta_q, v_max, a_max)
+                total_time += max(t_required, 0.1)
 
         t_samples = np.arange(0, total_time + dt, dt)
         u_samples = np.linspace(0, 1, len(t_samples))  # parametric domain
+        scale = 1.0 / total_time
 
         traj_msg = JointTrajectory()
         traj_msg.joint_names = joint_names
         traj_msg.header = Header()
 
-        scale = 1.0 / total_time
-
-        for i, u in enumerate(u_samples):
+        for i, (t, u) in enumerate(zip(t_samples, u_samples)):
             point = JointTrajectoryPoint()
             point.positions = [s(u) for s in splines]
             point.velocities = [s.derivative(1)(u) * scale for s in splines]
             point.accelerations = [s.derivative(2)(u) * scale**2 for s in splines]
-            point.time_from_start = rospy.Duration.from_sec(i * dt)
+            point.time_from_start = rospy.Duration.from_sec(t)
             traj_msg.points.append(point)
 
         traj_msg.header.stamp = rospy.Time.now() + rospy.Duration(0.3)
@@ -154,7 +151,8 @@ class PathPostProcessing:
         velocity_limits: np.ndarray,
         acceleration_limits: np.ndarray,
         dt: float = 0.005,
-        max_vel_acc_multiplier: float = 0.1
+        max_vel_acc_multiplier: float = 0.1,
+        duration: float = None
     ) -> JointTrajectory:
         """
         True quintic spline interpolation for joint-space trajectory.
