@@ -135,7 +135,7 @@ def plot_3d_paths(all_tests):
     plt.show()
 
 if __name__ == '__main__':
-    analyze_results('/home/marcin/results/planner_prm_obstacle_30_loops_test_results.npz')
+    analyze_results('/home/neurorobotic_student/results/planner_prm_obstacle_30_loops_test_results.npz')
 
 
 

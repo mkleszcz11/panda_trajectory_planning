@@ -294,106 +294,106 @@ class AntipodalGraspPlanner:
         return vis_image
 
 
-# Example Usage:
-if __name__ == '__main__':
-    mask_height, mask_width = 300, 400
-    sample_mask = np.zeros((mask_height, mask_width), dtype=np.uint8)
-    ellipse_major_axis = mask_width // 3
-    ellipse_minor_axis = mask_height // 6  # For ellipse, we want to grasp across this
-    ellipse_angle = 30
-    initial_ellipse_center = (mask_width // 2, mask_height // 2)
-    cv2.ellipse(sample_mask, initial_ellipse_center, (ellipse_major_axis, ellipse_minor_axis), ellipse_angle, 0, 360,
-                255, -1)
+# # Example Usage:
+# if __name__ == '__main__':
+#     mask_height, mask_width = 300, 400
+#     sample_mask = np.zeros((mask_height, mask_width), dtype=np.uint8)
+#     ellipse_major_axis = mask_width // 3
+#     ellipse_minor_axis = mask_height // 6  # For ellipse, we want to grasp across this
+#     ellipse_angle = 30
+#     initial_ellipse_center = (mask_width // 2, mask_height // 2)
+#     cv2.ellipse(sample_mask, initial_ellipse_center, (ellipse_major_axis, ellipse_minor_axis), ellipse_angle, 0, 360,
+#                 255, -1)
 
-    MAX_GRIPPER_OPENING_PIXELS = 180
-    MIN_GRIPPER_WIDTH_PIXELS = 20
-    # For ellipses, we want high parallelism and narrow width, and close to center
-    ANGLE_TOLERANCE_DEGREES = 15  # Stricter for better parallelism
-    CONTOUR_EPSILON_FACTOR = 0.003  # More points on the contour for finer detail
-    NORMAL_NEIGHBORHOOD_K = 2  # Moderate k for smoothing on the more detailed contour
+#     MAX_GRIPPER_OPENING_PIXELS = 180
+#     MIN_GRIPPER_WIDTH_PIXELS = 20
+#     # For ellipses, we want high parallelism and narrow width, and close to center
+#     ANGLE_TOLERANCE_DEGREES = 15  # Stricter for better parallelism
+#     CONTOUR_EPSILON_FACTOR = 0.003  # More points on the contour for finer detail
+#     NORMAL_NEIGHBORHOOD_K = 2  # Moderate k for smoothing on the more detailed contour
 
-    # Scoring weights
-    DIST_PENALTY_WEIGHT = 0.05  # Increase to penalize distance from CoG more
-    WIDTH_FAVOR_NARROW_WEIGHT = 1.0  # Increase to favor narrower grasps more (good for ellipses)
-    # Set to 0 if you don't want to explicitly favor narrow
+#     # Scoring weights
+#     DIST_PENALTY_WEIGHT = 0.05  # Increase to penalize distance from CoG more
+#     WIDTH_FAVOR_NARROW_WEIGHT = 1.0  # Increase to favor narrower grasps more (good for ellipses)
+#     # Set to 0 if you don't want to explicitly favor narrow
 
-    planner = AntipodalGraspPlanner(
-        max_gripper_opening_px=MAX_GRIPPER_OPENING_PIXELS,
-        min_grasp_width_px=MIN_GRIPPER_WIDTH_PIXELS,
-        angle_tolerance_deg=ANGLE_TOLERANCE_DEGREES,
-        contour_approx_epsilon_factor=CONTOUR_EPSILON_FACTOR,
-        normal_neighborhood_k=NORMAL_NEIGHBORHOOD_K,
-        dist_penalty_weight=DIST_PENALTY_WEIGHT,
-        width_favor_narrow_weight=WIDTH_FAVOR_NARROW_WEIGHT
-    )
+#     planner = AntipodalGraspPlanner(
+#         max_gripper_opening_px=MAX_GRIPPER_OPENING_PIXELS,
+#         min_grasp_width_px=MIN_GRIPPER_WIDTH_PIXELS,
+#         angle_tolerance_deg=ANGLE_TOLERANCE_DEGREES,
+#         contour_approx_epsilon_factor=CONTOUR_EPSILON_FACTOR,
+#         normal_neighborhood_k=NORMAL_NEIGHBORHOOD_K,
+#         dist_penalty_weight=DIST_PENALTY_WEIGHT,
+#         width_favor_narrow_weight=WIDTH_FAVOR_NARROW_WEIGHT
+#     )
 
-    print(f"--- Finding grasps on initial mask (k={NORMAL_NEIGHBORHOOD_K}, eps_factor={CONTOUR_EPSILON_FACTOR}, "
-          f"angle_tol={ANGLE_TOLERANCE_DEGREES}, dist_w={DIST_PENALTY_WEIGHT}, narrow_w={WIDTH_FAVOR_NARROW_WEIGHT}) ---")
+#     print(f"--- Finding grasps on initial mask (k={NORMAL_NEIGHBORHOOD_K}, eps_factor={CONTOUR_EPSILON_FACTOR}, "
+#           f"angle_tol={ANGLE_TOLERANCE_DEGREES}, dist_w={DIST_PENALTY_WEIGHT}, narrow_w={WIDTH_FAVOR_NARROW_WEIGHT}) ---")
 
-    local_grasps, object_centroid_initial = planner.find_grasps(sample_mask.copy())
-    best_local_grasp_for_tracking = None
+#     local_grasps, object_centroid_initial = planner.find_grasps(sample_mask.copy())
+#     best_local_grasp_for_tracking = None
 
-    if local_grasps and object_centroid_initial is not None:
-        print(
-            f"Found {len(local_grasps)} potential local grasps relative to initial centroid {object_centroid_initial}.")
-        best_local_grasp_for_tracking = local_grasps[0]
-        grasps_to_visualize_initial = []
-        for i, lg in enumerate(local_grasps[:min(10, len(local_grasps))]):  # Show more grasps if available
-            print(f"  Grasp {i + 1}: Score={lg['score']:.4f}, Width={lg['width_px']:.1f}px, "
-                  f"Dot={lg['dot_product']:.3f}, DistCOG={lg['dist_to_obj_centroid']:.1f}")
-            # print(f"    P1_loc={lg['p1_local']}, P2_loc={lg['p2_local']}, AbsGraspCenter={lg['grasp_center_abs']}")
-            abs_grasp = planner.transform_grasp_to_image_space(lg, object_centroid_initial)
-            if abs_grasp: grasps_to_visualize_initial.append(abs_grasp)
+#     if local_grasps and object_centroid_initial is not None:
+#         print(
+#             f"Found {len(local_grasps)} potential local grasps relative to initial centroid {object_centroid_initial}.")
+#         best_local_grasp_for_tracking = local_grasps[0]
+#         grasps_to_visualize_initial = []
+#         for i, lg in enumerate(local_grasps[:min(10, len(local_grasps))]):  # Show more grasps if available
+#             print(f"  Grasp {i + 1}: Score={lg['score']:.4f}, Width={lg['width_px']:.1f}px, "
+#                   f"Dot={lg['dot_product']:.3f}, DistCOG={lg['dist_to_obj_centroid']:.1f}")
+#             # print(f"    P1_loc={lg['p1_local']}, P2_loc={lg['p2_local']}, AbsGraspCenter={lg['grasp_center_abs']}")
+#             abs_grasp = planner.transform_grasp_to_image_space(lg, object_centroid_initial)
+#             if abs_grasp: grasps_to_visualize_initial.append(abs_grasp)
 
-        display_image_initial = cv2.cvtColor(sample_mask, cv2.COLOR_GRAY2BGR)
-        display_image_with_grasps_initial = planner.visualize_grasps(
-            display_image_initial,
-            grasps_to_visualize_initial,
-            num_top_grasps=5,  # Visualize top 5
-            object_centroid_abs=object_centroid_initial  # Pass centroid for visualization
-        )
-        cv2.imshow("Initial Mask with Grasps", display_image_with_grasps_initial)
-    else:
-        print("No suitable grasps found on the initial mask or centroid not found.")
+#         display_image_initial = cv2.cvtColor(sample_mask, cv2.COLOR_GRAY2BGR)
+#         display_image_with_grasps_initial = planner.visualize_grasps(
+#             display_image_initial,
+#             grasps_to_visualize_initial,
+#             num_top_grasps=5,  # Visualize top 5
+#             object_centroid_abs=object_centroid_initial  # Pass centroid for visualization
+#         )
+#         # cv2.imshow("Initial Mask with Grasps", display_image_with_grasps_initial)
+#     else:
+#         print("No suitable grasps found on the initial mask or centroid not found.")
 
-    # --- Simulation of object moving ---
-    if best_local_grasp_for_tracking and object_centroid_initial is not None:
-        print("\n--- Simulating object movement and tracking the best grasp ---")
-        new_mask = np.zeros((mask_height, mask_width), dtype=np.uint8)
-        delta_x, delta_y = 50, 30
-        new_ellipse_center_tracked = (initial_ellipse_center[0] + delta_x, initial_ellipse_center[1] + delta_y)
-        cv2.ellipse(new_mask, new_ellipse_center_tracked, (ellipse_major_axis, ellipse_minor_axis), ellipse_angle, 0,
-                    360, 255, -1)
+#     # --- Simulation of object moving ---
+#     if best_local_grasp_for_tracking and object_centroid_initial is not None:
+#         print("\n--- Simulating object movement and tracking the best grasp ---")
+#         new_mask = np.zeros((mask_height, mask_width), dtype=np.uint8)
+#         delta_x, delta_y = 50, 30
+#         new_ellipse_center_tracked = (initial_ellipse_center[0] + delta_x, initial_ellipse_center[1] + delta_y)
+#         cv2.ellipse(new_mask, new_ellipse_center_tracked, (ellipse_major_axis, ellipse_minor_axis), ellipse_angle, 0,
+#                     360, 255, -1)
 
-        new_contours_tracked, _ = cv2.findContours(new_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        object_centroid_tracked = None
-        if new_contours_tracked:
-            new_main_contour_tracked = max(new_contours_tracked, key=cv2.contourArea)
-            object_centroid_tracked = planner._calculate_centroid(new_main_contour_tracked)
+#         new_contours_tracked, _ = cv2.findContours(new_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+#         object_centroid_tracked = None
+#         if new_contours_tracked:
+#             new_main_contour_tracked = max(new_contours_tracked, key=cv2.contourArea)
+#             object_centroid_tracked = planner._calculate_centroid(new_main_contour_tracked)
 
-        if object_centroid_tracked is not None:
-            print(f"Object presumed moved. New centroid: {object_centroid_tracked}")
-            tracked_grasp_absolute = planner.transform_grasp_to_image_space(best_local_grasp_for_tracking,
-                                                                            object_centroid_tracked)
-            if tracked_grasp_absolute:
-                print(
-                    f"  Tracked Grasp (absolute): P1={tracked_grasp_absolute['p1']}, P2={tracked_grasp_absolute['p2']}, "
-                    f"Width={tracked_grasp_absolute['width_px']:.2f}px, Angle={math.degrees(tracked_grasp_absolute['angle_rad']):.2f}deg, "
-                    f"Original Score={tracked_grasp_absolute['score']:.4f}")
-                display_image_tracked = cv2.cvtColor(new_mask, cv2.COLOR_GRAY2BGR)
-                display_image_with_tracked_grasp = planner.visualize_grasps(
-                    display_image_tracked, [tracked_grasp_absolute], num_top_grasps=1,
-                    object_centroid_abs=object_centroid_tracked
-                )
-                cv2.imshow("Moved Object with Tracked Grasp", display_image_with_tracked_grasp)
-            else:
-                print("Could not transform the tracked grasp.")
-        else:
-            print("Could not find centroid for the moved object in the new mask.")
+#         if object_centroid_tracked is not None:
+#             print(f"Object presumed moved. New centroid: {object_centroid_tracked}")
+#             tracked_grasp_absolute = planner.transform_grasp_to_image_space(best_local_grasp_for_tracking,
+#                                                                             object_centroid_tracked)
+#             if tracked_grasp_absolute:
+#                 print(
+#                     f"  Tracked Grasp (absolute): P1={tracked_grasp_absolute['p1']}, P2={tracked_grasp_absolute['p2']}, "
+#                     f"Width={tracked_grasp_absolute['width_px']:.2f}px, Angle={math.degrees(tracked_grasp_absolute['angle_rad']):.2f}deg, "
+#                     f"Original Score={tracked_grasp_absolute['score']:.4f}")
+#                 display_image_tracked = cv2.cvtColor(new_mask, cv2.COLOR_GRAY2BGR)
+#                 display_image_with_tracked_grasp = planner.visualize_grasps(
+#                     display_image_tracked, [tracked_grasp_absolute], num_top_grasps=1,
+#                     object_centroid_abs=object_centroid_tracked
+#                 )
+#                 # cv2.imshow("Moved Object with Tracked Grasp", display_image_with_tracked_grasp)
+#             else:
+#                 print("Could not transform the tracked grasp.")
+#         else:
+#             print("Could not find centroid for the moved object in the new mask.")
 
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-    elif not best_local_grasp_for_tracking:
-        print("No initial best grasp was selected to track.")
-    elif object_centroid_initial is None:
-        print("Initial object centroid was not found.")
+#         cv2.waitKey(0)
+#         cv2.destroyAllWindows()
+#     elif not best_local_grasp_for_tracking:
+#         print("No initial best grasp was selected to track.")
+#     elif object_centroid_initial is None:
+#         print("Initial object centroid was not found.")

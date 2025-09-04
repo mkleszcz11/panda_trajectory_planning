@@ -43,7 +43,7 @@ class RRTWithConnectingPlanner(Planner):
         self.max_goal_samples: int = parameters.get("max_goal_samples", 10)
         self.goal_configs: t.List[np.ndarray] = []
 
-        weights = np.array([0.5, 1.0, 10.75, 0.5, 0.05, 0.05, 0.05])  # Example: penalise lower joints less
+        weights = np.array([0.5, 1.0, 10.0, 0.5, 0.25, 2.25, 0.25])  # Example: penalise lower joints less
         self.weights = weights#[::-1] # REVERSE THE WEIGHTS
 
     def plan(self) -> t.Tuple[t.List[np.ndarray], bool]:
@@ -202,7 +202,7 @@ class RRTWithConnectingPlanner(Planner):
             Weighted L2 distance.
         """
         if weights is None:
-            weights = np.ones_like(config1)
+            weights = np.array[1.0, 5.0, 1.0, 1.0, 1.0, 1.0, 1.0]
         diff = config1 - config2
         return np.sqrt(np.sum(weights * diff**2))
     

@@ -65,4 +65,4 @@ def analyze_results(filename='/tmp/planner_test_results.npz', output_dir='plots'
         plt.close(fig)
         print(f"Saved high-resolution plot for loop {loop_idx} to {plot_path}")
 
-analyze_results('/home/marcin/results/planner_fixed_no_obstacle_30_loops_test_results.npz')
+analyze_results('/home/neurorobotic_student/results/planner_fixed_no_obstacle_30_loops_test_results.npz')
