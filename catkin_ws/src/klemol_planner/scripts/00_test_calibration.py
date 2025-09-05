@@ -4,6 +4,7 @@ import rospy
 import copy
 import moveit_commander
 import time
+import math
 
 from klemol_planner.planners.rrt import RRTPlanner
 from klemol_planner.planners.rrt_star import RRTStarPlanner
@@ -24,7 +25,7 @@ from klemol_planner.utils.config_loader import load_planner_params
 from klemol_planner.camera_utils.kalman_filter import AsynchronousPredictiveKalmanFilter
 import numpy as np
 
-class DynamicDemo:
+class TestCalibration:
     def __init__(self, planner_name: str, post_processing_method: str, objects_names: t.List[str], include_obstacle: bool = False):
         """
         Demo initialization.
@@ -34,6 +35,8 @@ class DynamicDemo:
             post_processing_method (str): Name of the post processing method to use.
             objects_names (t.List[str]): List of object names to be used in the demo.
         """
+        KALMAN_FILTER_TIME_HORIZON = 5.0
+
         # List of objects that should be cleaned
         self.objects_to_clean = objects_names
 
@@ -44,13 +47,13 @@ class DynamicDemo:
         # in yolo, must be associated with an aruco code (one in the box)
         # Note: return values from camera operations are corner_XY, where XY is the aruco code number (1, 2, 14, 200, ...)
         self.object_name_to_aruco = {
-            "banana": "corner_11",
-            "sports ball": "corner_10",
-            "scissors": "corner_10",
-            "spoon": "corner_10",
-            "fork": "corner_11",
-            "carrot": "corner_10",
-            "knife": "corner_10",
+            # "banana": "corner_11",
+            # "sports ball": "corner_10",
+            # "scissors": "corner_10",
+            # "spoon": "corner_10",
+            # "fork": "corner_11",
+            # "carrot": "corner_10",
+            # "knife": "corner_10",
         }
 
         # Validate if object names are a subset of available names in object_name_to_aruco
@@ -73,7 +76,7 @@ class DynamicDemo:
 
         # All possible post processing methods available for the demo
         self.available_post_processing_methods = {
-            "cubic_hermite": self.post_processing.generate_cubic_trajectory,
+            "qubic_spline": self.post_processing.generate_cubic_trajectory,
             "quintic_polynomial": self.post_processing.generate_quintic_polynomial_trajectory,
             "quintic_bspline": self.post_processing.generate_quintic_bspline_trajectory,
         }
@@ -121,11 +124,11 @@ class DynamicDemo:
         #     initial_estimate_covariance_diag=[0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
         # )
         CAM_FPS: int = 10
-        self.PREDICTION_HORIZON: int = 100; KF_DT: float = 1.0 / CAM_FPS
-        KF_PROCESS_NOISE_STD: float = 0.1; KF_INITIAL_COV_DIAG: t.List[float] = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+        self.PREDICTION_HORIZON: int = 70; KF_DT: float = 1.0 / CAM_FPS
+        KF_PROCESS_NOISE_STD: float = 0.02; KF_INITIAL_COV_DIAG: t.List[float] = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
 
         self.kalman_filter = AsynchronousPredictiveKalmanFilter(N=self.PREDICTION_HORIZON, dt=KF_DT, process_noise_std=KF_PROCESS_NOISE_STD, initial_estimate_covariance_diag=KF_INITIAL_COV_DIAG)
-        measurement_noise_vars = np.array([0.015, 0.015, 0.01]) ** 2
+        measurement_noise_vars = np.array([0.003, 0.003, 0.01]) ** 2
         self.kalman_filter.R = np.diag(measurement_noise_vars)
 
     def localise_dropping_locations(self, objects_names: t.List[str], vertical_offset: float = 0.0) -> t.Dict[str, PointWithOrientation]:
@@ -218,7 +221,7 @@ class DynamicDemo:
         print(f"PREDICTED POSITION IS -> {pred_pos_3d}")
         return pred_pos_3d[0], pred_pos_3d[1]  # x, y
 
-    def kalman_wrapper_update_filter_about_the_object(self, object_name: str, duration: float = 7.0):
+    def kalman_wrapper_update_filter_about_the_object(self, object_name: str, duration: float = 3.0):
         """
         Update Kalman Filter with XY position measurements of the object for a given duration.
         """
@@ -235,52 +238,27 @@ class DynamicDemo:
                 print(f"updating kalman filter with x = {transformed.x}, y = {transformed.y}, z = {transformed.z}")
                 predicted_states, _ = self.kalman_filter.update(measurement)
                 break
-            #rospy.sleep(0.05)
+            rospy.sleep(0.05)
         return predicted_states
 
-    def pick_and_drop_specified_time(self, object_name: str, approach_vertical_offset: float = 0.0, duration: float = 5.0):
+    def move_to_aruco_code_11(self, approach_vertical_offset: float = 0.0, duration: float = 5.0):
         """
-        Pick and drop the specified object.
-
-        1. Open gripper.
-        2. Find the picking point for the object.
-        3. Move to the picking point - if approaching from above, add post_goal_path
-        4. Close the gripper to pick the object.
-        5. Move to the dropping point.
-        6. Open the gripper to drop the object.
-
-        pick path:
-        pick_1_p -> pick_2_p -> pick_3_p -> pick_p, where pick_p is the actual picking point and the rest of the points are copies with decreasing z
-
-        drop path:
-        drop_3_p -> drop_2_p -> drop_1_p -> drop_p, where drop_p is the actual droping point and the rest of the points are copies with decreasing z
-
-        Args:
-            object_name (str): Name of the object to pick and drop.
-            approach_vertical_offset (float): Vertical offset to approach the object from above.
+        Moves the robot to ArUco marker 11, approaching from above.
         """
-        # TIME_MARIGIN = 1.5
-        # GRASP_TIME = 2.7
-        TIME_MARIGIN = 0
-        GRASP_TIME = 0
+        rospy.loginfo("Moving to ArUco code 11...")
 
-        if object_name not in self.objects_to_clean:
-            raise ValueError(f"Object {object_name} is not in the list of objects to clean.")
-
-        # 1. Update Kalman Filter about object position
-        predicted_states = self.kalman_wrapper_update_filter_about_the_object(object_name=object_name, duration=1.0)
-        self.robot_model.open_gripper()
+        # Get the marker transform
+        marker_transforms = self.camera_operations.get_marker_transforms()
 
         # 2. Locate picking point
-        picking_point = self.find_picking_point(object_name, vertical_offset=approach_vertical_offset)
-        try:
-            # x_future, y_future = self.kalman_wrapper_predict_xy(seconds_ahead=duration, predicted_states=predicted_states)
-            x_future, y_future, _ = self.kalman_filter.predict_pose_at_time(seconds_ahead=duration+TIME_MARIGIN+GRASP_TIME)
-        except:
-            print("PREDICTION FAILED")
-            return
-        picking_point.x, picking_point.y = x_future, y_future
-        picking_point.z = 0.268 # 0.348  # Static, depending on conveyor setup
+        picking_point = marker_transforms["corner_11"]
+
+        mat = marker_transforms["corner_11"]
+        x, y, z = mat[:3, 3]
+        # Define approach pose (above corner, facing down)
+        corner_cam = PointWithOrientation(x, y, z, 0.0, 0.0, math.pi)   
+        picking_point = self.panda_transformations.transform_point(corner_cam, 'camera', 'base')
+        picking_point.z += 0.01
 
         # if approach_vertical_offset > 0:
         #     actual_picking_point = copy.deepcopy(picking_point)
@@ -297,9 +275,7 @@ class DynamicDemo:
         pick_1_p.z += 0.05
 
         post_goal_path = [pick_2_p, pick_3_p, picking_point]
-        rospy.loginfo(f"Picking {object_name} at {picking_point} in {duration:.2f}s")
 
-        rospy.loginfo(f"--- MEASUREMENT START - TIME = {time.time()} ---")
         # If current robot tool z position is below 0.05 add 3 waypoints above the current position, else none
         # pre_start_path = None
 
@@ -319,7 +295,6 @@ class DynamicDemo:
         # wp5.z += 0.05
         pre_start_path = [wp1, wp2, wp3]
 
-        rospy.loginfo(f"--- MEASUREMENT START - TIME = {time.time()} ---")
         # 4. Move to pick, then grasp
         self.robot_model.move_with_trajectory_planner_predefined_time(
             planner=self.demo_planner,
@@ -331,43 +306,7 @@ class DynamicDemo:
             duration=duration
         )
 
-        rospy.loginfo(f"--- MEASUREMENT STOP - TIME = {time.time()} ---")
-
-        self.robot_model.close_gripper()
-        rospy.loginfo(f"Picked {object_name} at {picking_point}")
-
-        # 5. Define drop path: drop_1_p -> drop_2_p -> drop_3_p -> drop_p
-        dropping_point = self.drop_points.get(object_name)
-        if not dropping_point:
-            raise ValueError(f"Dropping point for {object_name} not found.")
-
-        drop_p = copy.deepcopy(dropping_point)
-        drop_3_p = copy.deepcopy(drop_p)
-        drop_3_p.z += approach_vertical_offset
-
-        drop_2_p = copy.deepcopy(drop_3_p)
-        drop_2_p.z += 0.05
-
-        drop_1_p = copy.deepcopy(drop_2_p)
-        drop_1_p.z += 0.05
-
-        pre_drop_path = [pick_3_p, pick_2_p, pick_1_p]
-
-        post_drop_path = [drop_2_p, drop_3_p, dropping_point]
-
-        # 6. Move to drop
-        self.robot_model.move_with_trajectory_planner(
-            planner=self.demo_planner,
-            post_processing=self.post_processing,
-            goal=drop_1_p,
-            pre_start_path=pre_drop_path,
-            post_goal_path=post_drop_path,
-            post_processing_method=self.post_processing_method
-        )
-
-        # 7. Release
-        self.robot_model.open_gripper()
-        rospy.loginfo(f"Dropped {object_name} at {dropping_point}")
+        # self.robot_model.close_gripper()
 
     def run(self):
         """
@@ -376,30 +315,14 @@ class DynamicDemo:
         3. Pick and drop from that point, execute in such a way to pick at specified time .
         Repeat till localise_picking_location returns an empty list num_of_tries_to_find times in the row.
         """
-        num_of_tries_to_find = 20
+        num_of_tries_to_find = 30
         failed_tries = 0
         rospy.loginfo("Starting the dynamic demo for picking and dropping objects.")
 
-        while failed_tries < num_of_tries_to_find:
-            try:
-                self.pick_points = self.localise_picking_locations(self.objects_to_clean, vertical_offset=0.15)
-                rospy.loginfo(f"=====================================================")
-                rospy.loginfo(f"All objects which can be picked -> {self.pick_points}")
-                if not self.pick_points:
-                    rospy.logwarn("No picking points found. Retrying...")
-                    failed_tries += 1
-                else:
-                    object_name, _ = self.pick_points[0]
-                    rospy.loginfo(f"Trying to pick and drop object: {object_name}")
-                    self.pick_and_drop_specified_time(object_name, approach_vertical_offset=0.05, duration=4.0)
-                    failed_tries = 0
+        # TODO - YOU MUST IMPLEMENT THIS METHOD
+        self.move_to_aruco_code_11(approach_vertical_offset=0.05, duration=2.0)
 
-                if failed_tries >= int(num_of_tries_to_find/4):
-                    self.robot_model.move_to_joint_config(self.start_joint_config)
-            except:
-                rospy.loginfo("I FAILED WOLOLO - TRYING AGAIN")
-
-        rospy.loginfo("dynamic demo finished.")
+        rospy.loginfo("Calibration done.")
 
     def add_box_obstacle(self, name, size, position, orientation=(0, 0, 0, 1), collision_margin=0.0):
         """
@@ -434,11 +357,11 @@ def main():
 
     # Example usage
     planner_name = "rrt_with_connecting"  # Choose from available planners
-    post_processing_method = "quintic_polynomial"  # Choose from available post processing methods
-    objects_to_clean = ["scissors", "fork", "spoon"]  # Define the objects to clean
+    post_processing_method = "quintic_bspline"  # Choose from available post processing methods
+    objects_to_clean = []  # Define the objects to clean
     # objects_to_clean = ["banana"]
 
-    demo = DynamicDemo(planner_name, post_processing_method, objects_to_clean, include_obstacle=False)
+    demo = TestCalibration(planner_name, post_processing_method, objects_to_clean, include_obstacle=False)
     demo.run()
 
 if __name__ == "__main__":
